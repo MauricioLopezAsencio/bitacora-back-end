@@ -16,7 +16,7 @@ public class ProductRepository implements  IProductResository{
 
     @Override
     public List<ProductModel> findAll() {
-       String SQL = "SELECT * FROM products";
+       String SQL = "SELECT * FROM cat_productos";
        return jdbcTemplate.query(SQL, BeanPropertyRowMapper.newInstance(ProductModel.class));
     }
 
