@@ -1,6 +1,7 @@
 package com.spring.security.jwt.controller;
 
 import com.spring.security.jwt.model.EmpleadoModel;
+import com.spring.security.jwt.model.HerramientaModel;
 import com.spring.security.jwt.repository.IEmpleadoRepository;
 import com.spring.security.jwt.service.IProductService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,7 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
-import com.spring.security.jwt.model.ProductModel;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.util.List;
@@ -26,7 +26,7 @@ public class ProductController {
 
     @GetMapping("/products")
     public ResponseEntity<?> listProducts() {
-        List<ProductModel> products = this.iProductService.findAll();
+        List<HerramientaModel> products = this.iProductService.findAll();
         return new ResponseEntity<>(products, HttpStatus.OK);
     }
 

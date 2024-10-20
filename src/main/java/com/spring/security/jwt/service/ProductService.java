@@ -1,6 +1,6 @@
 package com.spring.security.jwt.service;
 
-import com.spring.security.jwt.model.ProductModel;
+import com.spring.security.jwt.model.HerramientaModel;
 import com.spring.security.jwt.repository.IProductResository;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +14,8 @@ public class ProductService implements  IProductService{
     private IProductResository iProductResository;
 
     @Override
-    public List<ProductModel> findAll() {
-        List<ProductModel> list;
+    public List<HerramientaModel> findAll() {
+        List<HerramientaModel> list;
         try{
             list = iProductResository.findAll();
         }catch (Exception ex){

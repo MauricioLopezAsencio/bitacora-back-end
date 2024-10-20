@@ -1,10 +1,10 @@
 package com.spring.security.jwt.repository;
 
+import com.spring.security.jwt.model.HerramientaModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-import com.spring.security.jwt.model.ProductModel;
 
 import java.util.List;
 
@@ -15,9 +15,9 @@ public class ProductRepository implements  IProductResository{
     private JdbcTemplate jdbcTemplate;
 
     @Override
-    public List<ProductModel> findAll() {
+    public List<HerramientaModel> findAll() {
        String SQL = "SELECT * FROM cat_productos";
-       return jdbcTemplate.query(SQL, BeanPropertyRowMapper.newInstance(ProductModel.class));
+       return jdbcTemplate.query(SQL, BeanPropertyRowMapper.newInstance(HerramientaModel.class));
     }
 
 }
