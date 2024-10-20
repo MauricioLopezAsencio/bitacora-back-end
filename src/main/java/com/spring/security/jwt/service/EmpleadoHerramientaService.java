@@ -45,6 +45,8 @@ public class EmpleadoHerramientaService {
         EmpleadoHerramientaModel empleadoHerramienta = new EmpleadoHerramientaModel();
         empleadoHerramienta.setEmpleado(empleado);
         empleadoHerramienta.setHerramienta(herramienta);
+        empleadoHerramienta.setFecha(LocalDate.now());
+        empleadoHerramienta.setEstatus(false);
 
         // Guardar la relación en la tabla pivote
         return empleadoHerramientaRepository.save(empleadoHerramienta);
@@ -86,8 +88,8 @@ public class EmpleadoHerramientaService {
             bitacoraDto.setId(ehModel.getId());
             bitacoraDto.setNombreEmpleado(nombreEmpleado);
             bitacoraDto.setNombreHerramienta(nombreHerramienta);
-            bitacoraDto.setEstatus(true); // Asume que tienes un método isEstatus en tu modelo
-            bitacoraDto.setFecha(LocalDate.now()); // Establecer la fecha actual
+            bitacoraDto.setEstatus(ehModel.isEstatus()); // Asume que tienes un método isEstatus en tu modelo
+            bitacoraDto.setFecha(ehModel.getFecha()); // Establecer la fecha actual
 
             response.add(bitacoraDto);
         }
