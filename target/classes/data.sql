@@ -4,6 +4,15 @@ INSERT INTO cat_herramientas (nombre, categoria) VALUES
 ('Stilson', 'Categoría C'),
 ('Martillo', 'Categoría C');
 
+INSERT INTO empleado_herramienta (empleado_id, herramienta_id) VALUES
+(1, 1),
+(2, 1),
+(3, 4),
+(4, 4),
+(5, 4),
+(6, 4),
+(7, 4),
+(8, 4);
 
 INSERT INTO cat_empleados (nombre, primer_apellido, segundo_apellido, telefono) VALUES
 ('Juan', 'Pérez', 'Gómez', 5551234567),
