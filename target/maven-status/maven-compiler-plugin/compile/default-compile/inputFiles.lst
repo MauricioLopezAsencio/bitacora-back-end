@@ -1,0 +1,15 @@
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\service\EmpleadoService.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\dto\AuthRequestDto.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\dto\AuthResponseDto.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\repository\ProductRepository.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\controller\ProductController.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\MsSpringSecurityJwtApplication.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\repository\IProductResository.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\config\CorsConfig.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\model\EmpleadoModel.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\service\ProductService.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\model\ProductModel.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\service\IProductService.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\repository\IEmpleadoRepository.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\service\IEmpeladoService.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\repository\EmpleadoRepository.java
