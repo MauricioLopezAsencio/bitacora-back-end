@@ -5,10 +5,10 @@ FROM openjdk:17-slim
 WORKDIR /app
 
 # Copiar el archivo jar del proyecto al directorio /app en el contenedor
-COPY target/ms-spring-security-jwt-1.0.0.jar app.jar
-
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+COPY target/ms-spring-security-jwt-1.0.0.jar /app/ms-spring-security-jwt.jar
 
 # Exponer el puerto que usa la aplicación
 EXPOSE 3000
 
+# Comando para ejecutar la aplicación
+CMD ["java", "-jar", "/app/ms-spring-security-jwt.jar"]
