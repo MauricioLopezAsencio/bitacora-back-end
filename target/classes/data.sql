@@ -1,7 +1,8 @@
-INSERT INTO public.cat_productos (id, nombre, categoria) VALUES (1, 'Multimetro', 'Categoría A');
-INSERT INTO public.cat_productos (id, nombre, categoria) VALUES (2, 'Pinzas de corte', 'Categoría B');
-INSERT INTO public.cat_productos (id, nombre, categoria) VALUES (3, 'Stilson', 'Categoría C');
-INSERT INTO public.cat_productos (id, nombre, categoria) VALUES (4, 'Martillo', 'Categoría C');
+INSERT INTO cat_herramientas (nombre, categoria) VALUES
+('Multimetro', 'Categoría A'),
+('Pinzas de corte', 'Categoría B'),
+('Stilson', 'Categoría C'),
+('Martillo', 'Categoría C');
 
 
 INSERT INTO cat_empleados (nombre, primer_apellido, segundo_apellido, telefono) VALUES
