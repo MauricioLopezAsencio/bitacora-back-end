@@ -1,13 +1,13 @@
 package com.spring.security.jwt.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter
+@Setter
 @Entity
 @Table(name = "empleado_herramienta")
 public class EmpleadoHerramientaModel {

@@ -1,7 +1,7 @@
 package com.spring.security.jwt.service;
 
 import com.spring.security.jwt.model.HerramientaModel;
-import com.spring.security.jwt.repository.IProductResository;
+import com.spring.security.jwt.repository.impl.IProductResository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

@@ -1,7 +1,7 @@
 package com.spring.security.jwt.service;
 
 import com.spring.security.jwt.model.EmpleadoModel;
-import com.spring.security.jwt.repository.IEmpleadoRepository;
+import com.spring.security.jwt.repository.impl.IEmpleadoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
