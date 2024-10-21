@@ -97,11 +97,17 @@ public class EmpleadoHerramientaService {
         return response;
     }
 
-   /* // Método para eliminar la relación empleado-herramienta
     @Transactional
-    public void eliminarHerramientaDeEmpleado(Long empleadoId, Long herramientaId) {
-        EmpleadoHerramientaModel empleadoHerramienta = empleadoHerramientaRepository.findByEmpleadoIdAndHerramientaId(empleadoId, herramientaId)
-                .orElseThrow(() -> new RuntimeException("Relación no encontrada"));
-        empleadoHerramientaRepository.delete(empleadoHerramienta);
-    }*/
+    public EmpleadoHerramientaModel actualizarEstatus(BitacoraDto dto) {
+        // Buscar la relación empleado-herramienta por ID
+        EmpleadoHerramientaModel empleadoHerramienta = empleadoHerramientaRepository.findById(dto.getId())
+                .orElseThrow(() -> new RuntimeException("Relación empleado-herramienta no encontrada"));
+
+        // Actualizar el estatus
+        empleadoHerramienta.setEstatus(true);
+
+        // Guardar la relación actualizada
+        return empleadoHerramientaRepository.save(empleadoHerramienta);
+    }
+
 }

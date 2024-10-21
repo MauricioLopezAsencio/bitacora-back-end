@@ -53,6 +53,17 @@ public class ProductController {
         return ResponseEntity.ok(empleadoHerramienta);
     }
 
+    @PutMapping("/actualizar")
+    public ResponseEntity<EmpleadoHerramientaModel> actualizarEstatus(@RequestBody BitacoraDto dto) {
+        EmpleadoHerramientaModel actualizado = null;
+        try {
+            actualizado = empleadoHerramientaService.actualizarEstatus(dto);
+        } catch (RuntimeException e) {
+            // Aquí podrías loguear el error si lo deseas
+            // Log.error("Error al actualizar el estatus: " + e.getMessage());
+        }
 
+        return ResponseEntity.ok(actualizado != null ? actualizado : new EmpleadoHerramientaModel());
+    }
 
 }
