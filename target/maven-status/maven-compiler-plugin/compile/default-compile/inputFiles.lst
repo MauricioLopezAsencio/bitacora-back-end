@@ -2,6 +2,7 @@ C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\re
 C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\service\EmpleadoService.java
 C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\dto\AuthRequestDto.java
 C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\dto\AuthResponseDto.java
+C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\dto\HerramientaDto.java
 C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\repository\ProductRepository.java
 C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\controller\ProductController.java
 C:\Users\maugu\source\Bitacora-Back-end\src\main\java\com\spring\security\jwt\MsSpringSecurityJwtApplication.java

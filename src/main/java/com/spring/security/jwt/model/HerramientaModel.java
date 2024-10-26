@@ -24,6 +24,9 @@ public class HerramientaModel {
     @Column(name = "categoria", length = 250)
     private String categoria;
 
+    @Column(name = "estatus", length = 250)
+    private boolean estatus;
+
     @OneToMany(mappedBy = "herramienta")
     private List<EmpleadoHerramientaModel> empleados; // Cambia a una lista de la tabla pivote
 }
