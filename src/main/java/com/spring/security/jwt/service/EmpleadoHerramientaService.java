@@ -66,7 +66,7 @@ public class EmpleadoHerramientaService {
         Map<Long, String> empleadoMap = empleados.stream()
                 .collect(Collectors.toMap(
                         EmpleadoModel::getId,
-                        empleado -> empleado.getNombre() + " " + empleado.getPrimerApellido() + (empleado.getSegundoApellido() != null ? " " + empleado.getSegundoApellido() : "")
+                        empleado -> empleado.getNombre()
                 ));
 
         Map<Long, String> herramientaMap = herramientas.stream()

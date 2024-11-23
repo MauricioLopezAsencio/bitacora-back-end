@@ -20,14 +20,8 @@ public class EmpleadoModel {
     @Column(name = "nombre", length = 250)
     private String nombre;
 
-    @Column(name = "primer_apellido", length = 250)
-    private String primerApellido;
-
-    @Column(name = "segundo_apellido", length = 250)
-    private String segundoApellido;
-
-    @Column(name = "telefono", length = 250)
-    private Long telefono;
+    @Column(name = "nomina", length = 250)
+    private Long nomina;
 
     @OneToMany(mappedBy = "empleado")
     private List<EmpleadoHerramientaModel> herramientas; // Cambia a una lista de la tabla pivote
