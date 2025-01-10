@@ -1,8 +1,4 @@
-INSERT INTO cat_herramientas (nombre, categoria) VALUES
-('Multimetro', 'Categoría A'),
-('Pinzas de corte', 'Categoría B'),
-('Stilson', 'Categoría C'),
-('Martillo', 'Categoría C');
+
 
 INSERT INTO empleado_herramienta (empleado_id, herramienta_id) VALUES
 (1, 1),
