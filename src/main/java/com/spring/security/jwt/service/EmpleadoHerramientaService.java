@@ -99,14 +99,22 @@ public class EmpleadoHerramientaService {
 
     @Transactional
     public EmpleadoHerramientaModel actualizarEstatus(BitacoraDto dto) {
-        // Buscar la relación empleado-herramienta por ID
+        if (!dto.isEstatus()) {
+            throw new RuntimeException(
+                "No se puede desactivar una asignación. Si el empleado tomó la herramienta nuevamente, registre una nueva asignación."
+            );
+        }
+
         EmpleadoHerramientaModel empleadoHerramienta = empleadoHerramientaRepository.findById(dto.getId())
                 .orElseThrow(() -> new RuntimeException("Relación empleado-herramienta no encontrada"));
 
-        // Actualizar el estatus
-        empleadoHerramienta.setEstatus(true);
+        if (empleadoHerramienta.isEstatus()) {
+            throw new RuntimeException(
+                "Esta asignación ya está activa. Si el empleado tomó la herramienta nuevamente, registre una nueva asignación."
+            );
+        }
 
-        // Guardar la relación actualizada
+        empleadoHerramienta.setEstatus(true);
         return empleadoHerramientaRepository.save(empleadoHerramienta);
     }
 

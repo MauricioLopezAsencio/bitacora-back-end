@@ -43,8 +43,8 @@ public class ProductService implements  IProductService{
     }
 
     @Override
-    public void inactivarHerramienta(Long id) {
-        iProductResository.inactivarHerramienta(id);
+    public boolean toggleEstatus(Long id) {
+        return iProductResository.toggleEstatus(id);
     }
 
 

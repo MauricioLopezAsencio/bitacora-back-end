@@ -53,12 +53,12 @@ public class ProductRepository implements IProductResository {
     }
 
     @Override
-    public void inactivarHerramienta(Long id) {
-        String sql = "UPDATE cat_herramientas SET estatus = false WHERE id = ?";
-        int rowsAffected = jdbcTemplate.update(sql, id);
-
-        if (rowsAffected == 0) {
+    public boolean toggleEstatus(Long id) {
+        String sql = "UPDATE cat_herramientas SET estatus = NOT estatus WHERE id = ? RETURNING estatus";
+        Boolean nuevoEstatus = jdbcTemplate.queryForObject(sql, Boolean.class, id);
+        if (nuevoEstatus == null) {
             throw new RuntimeException("No se encontró ninguna herramienta con el id: " + id);
         }
+        return nuevoEstatus;
     }
 }

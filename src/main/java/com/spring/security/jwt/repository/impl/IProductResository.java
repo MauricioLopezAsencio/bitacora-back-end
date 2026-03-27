@@ -9,5 +9,5 @@ public interface IProductResository {
     List<HerramientaModel> findAll();
     List<HerramientaModel> findAllActivo();
     HerramientaDto save(HerramientaDto entity);
-    void inactivarHerramienta(Long id);
+    boolean toggleEstatus(Long id);
 }

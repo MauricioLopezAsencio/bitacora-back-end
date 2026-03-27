@@ -17,7 +17,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 @CrossOrigin("*")
@@ -65,29 +67,36 @@ public class ProductController {
     }
 
     @PostMapping("/asignar")
-    public ResponseEntity<EmpleadoHerramientaModel> asignarHerramientaAEmpleado(@RequestBody EmpleadoHerramientaDTO dto) {
+    public ResponseEntity<Map<String, Object>> asignarHerramientaAEmpleado(@RequestBody EmpleadoHerramientaDTO dto) {
         EmpleadoHerramientaModel empleadoHerramienta = empleadoHerramientaService.asignarHerramientaAEmpleado(dto);
-        return ResponseEntity.ok(empleadoHerramienta);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Herramienta asignada exitosamente");
+        response.put("data", empleadoHerramienta);
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/actualizar")
-    public ResponseEntity<EmpleadoHerramientaModel> actualizarEstatus(@RequestBody BitacoraDto dto) {
-        EmpleadoHerramientaModel actualizado = null;
+    public ResponseEntity<Map<String, Object>> actualizarEstatus(@RequestBody BitacoraDto dto) {
         try {
-            actualizado = empleadoHerramientaService.actualizarEstatus(dto);
+            EmpleadoHerramientaModel actualizado = empleadoHerramientaService.actualizarEstatus(dto);
+            String mensaje = actualizado.isEstatus() ? "Herramienta activada exitosamente" : "Herramienta desactivada exitosamente";
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", mensaje);
+            response.put("data", actualizado);
+            return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
-            // Aquí podrías loguear el error si lo deseas
-            // Log.error("Error al actualizar el estatus: " + e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         }
-
-        return ResponseEntity.ok(actualizado != null ? actualizado : new EmpleadoHerramientaModel());
     }
 
     @PutMapping("/inactivarHerramienta/{id}")
-    public ResponseEntity<String> inactivarHerramienta(@PathVariable("id")  Long id) {
+    public ResponseEntity<String> toggleHerramienta(@PathVariable("id") Long id) {
         try {
-            iProductService.inactivarHerramienta(id);
-            return ResponseEntity.ok("Herramienta inactivada exitosamente.");
+            boolean nuevoEstatus = iProductService.toggleEstatus(id);
+            String mensaje = nuevoEstatus ? "Herramienta activada exitosamente." : "Herramienta desactivada exitosamente.";
+            return ResponseEntity.ok(mensaje);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }

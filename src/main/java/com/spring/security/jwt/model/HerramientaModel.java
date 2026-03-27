@@ -1,5 +1,6 @@
 package com.spring.security.jwt.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,6 +28,7 @@ public class HerramientaModel {
     @Column(name = "estatus", length = 250)
     private boolean estatus;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "herramienta")
     private List<EmpleadoHerramientaModel> empleados; // Cambia a una lista de la tabla pivote
 }

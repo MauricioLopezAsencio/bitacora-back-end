@@ -10,5 +10,5 @@ public interface IProductService {
     List<HerramientaModel> findAll();
     List<HerramientaModel> findAllActivo();
     HerramientaDto saveHerramienta(HerramientaDto herramienta);
-    void inactivarHerramienta(Long id);
+    boolean toggleEstatus(Long id);
 }
