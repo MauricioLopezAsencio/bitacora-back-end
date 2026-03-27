@@ -18,4 +18,6 @@ public class HerramientaDto {
     private String categoria;
 
     private boolean estatus;
+
+    private Integer cantidadTotal;
 }

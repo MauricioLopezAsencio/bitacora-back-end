@@ -2,36 +2,81 @@ package com.spring.security.jwt.repository;
 
 import com.spring.security.jwt.model.EmpleadoModel;
 import com.spring.security.jwt.repository.impl.IEmpleadoRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public class EmpleadoRepository implements IEmpleadoRepository {
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
+
+    public EmpleadoRepository(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
     @Override
     public List<EmpleadoModel> findAll() {
-        String SQL = "SELECT * FROM cat_empleados";
-        return jdbcTemplate.query(SQL, BeanPropertyRowMapper.newInstance(EmpleadoModel.class));
+        String sql = "SELECT id, nombre, nomina FROM cat_empleados ORDER BY nombre";
+        return jdbcTemplate.query(sql, BeanPropertyRowMapper.newInstance(EmpleadoModel.class));
     }
 
     @Override
     public Optional<EmpleadoModel> findById(Long id) {
-        String SQL = "SELECT * FROM cat_empleados WHERE id = ?";
+        String sql = "SELECT id, nombre, nomina FROM cat_empleados WHERE id = ?";
         try {
-            EmpleadoModel empleado = jdbcTemplate.queryForObject(SQL, new Object[]{id}, BeanPropertyRowMapper.newInstance(EmpleadoModel.class));
-            return Optional.ofNullable(empleado); // Devuelve el empleado envuelto en un Optional
+            EmpleadoModel empleado = jdbcTemplate.queryForObject(
+                    sql, BeanPropertyRowMapper.newInstance(EmpleadoModel.class), id);
+            return Optional.ofNullable(empleado);
         } catch (EmptyResultDataAccessException e) {
-            return Optional.empty(); // Si no se encuentra, devuelve Optional vacío
+            return Optional.empty();
         }
     }
 
+    @Override
+    public EmpleadoModel save(EmpleadoModel empleado) {
+        String sql = "INSERT INTO cat_empleados (nombre, nomina, ds_creado_por, ds_actualizado_por) VALUES (?, ?, ?, ?)";
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+
+        jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql, new String[]{"id"});
+            ps.setString(1, empleado.getNombre());
+            ps.setLong(2, empleado.getNomina());
+            ps.setString(3, empleado.getDsCreadoPor());
+            ps.setString(4, empleado.getDsActualizadoPor());
+            return ps;
+        }, keyHolder);
+
+        Number key = keyHolder.getKey();
+        if (key != null) {
+            empleado.setId(key.longValue());
+        }
+        return empleado;
+    }
+
+    @Override
+    public EmpleadoModel update(Long id, EmpleadoModel empleado) {
+        findById(id).orElseThrow(() ->
+                new EntityNotFoundException("Empleado no encontrado con id: " + id));
+
+        String sql = "UPDATE cat_empleados SET nombre = ?, nomina = ?, ds_actualizado_por = ? WHERE id = ?";
+        jdbcTemplate.update(sql, empleado.getNombre(), empleado.getNomina(), empleado.getDsActualizadoPor(), id);
+        empleado.setId(id);
+        return empleado;
+    }
+
+    @Override
+    public void deleteById(Long id) {
+        findById(id).orElseThrow(() ->
+                new EntityNotFoundException("Empleado no encontrado con id: " + id));
+        jdbcTemplate.update("DELETE FROM cat_empleados WHERE id = ?", id);
+    }
 }

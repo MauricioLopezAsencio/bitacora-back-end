@@ -28,6 +28,12 @@ public class HerramientaModel {
     @Column(name = "estatus", length = 250)
     private boolean estatus;
 
+    @Column(name = "cantidad_total")
+    private Integer cantidadTotal;
+
+    @Column(name = "cantidad_disponible")
+    private Integer cantidadDisponible;
+
     @JsonIgnore
     @OneToMany(mappedBy = "herramienta")
     private List<EmpleadoHerramientaModel> empleados; // Cambia a una lista de la tabla pivote

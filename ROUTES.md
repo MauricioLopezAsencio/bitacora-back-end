@@ -1,185 +1,92 @@
-# ROUTES — VALIA Core
+# ROUTES — bt-backend
 
 Inventario de rutas HTTP registradas en los controladores Spring MVC.
-Las columnas **Vista / Acción** indican la plantilla Thymeleaf renderizada o el comportamiento de la ruta.
+
+> **Autenticación:** Todas las rutas excepto `/api/v1/auth/**` requieren header `Authorization: Bearer <token>`.
 
 ---
 
-## Autenticación — `AuthenticationController`
+## Autenticación — `AuthController` (`/api/v1/auth`) — PÚBLICA
 
-| Método | Ruta | Vista / Acción                        |
-|--------|------|---------------------------------------|
-| GET    | `/`  | `templates/auth/login.html`           |
+| Método | Ruta                   | Descripción                          |
+|--------|------------------------|--------------------------------------|
+| POST   | `/api/v1/auth/login`   | Login con usuario y contraseña → JWT |
 
----
-
-## Dashboard — `DashboardController`
-
-| Método | Ruta         | Vista / Acción                         |
-|--------|--------------|----------------------------------------|
-| GET    | `/dashboard` | `templates/dashboard/index.html`       |
-
-**Atributos que se inyectan en el modelo:**
-
-| Atributo        | Tipo                  | Descripción                                                    |
-|-----------------|-----------------------|----------------------------------------------------------------|
-| `kpisCentrales` | `List<CentralKpiDto>` | KPIs por central filtrados por permisos del usuario en sesión  |
-| `username`      | `String`              | Nombre completo del usuario autenticado                        |
-
----
-
-## Usuarios — `UsersController`
-
-| Método | Ruta                 | Vista / Acción                                          |
-|--------|----------------------|---------------------------------------------------------|
-| GET    | `/users`             | `templates/users/index.html` — listado completo        |
-| GET    | `/users/new`         | `redirect:/users` *(pendiente de implementar)*          |
-| GET    | `/users/{id}/edit`   | `redirect:/users` *(pendiente de implementar)*          |
-| POST   | `/users/{id}/delete` | `redirect:/users` *(pendiente de implementar)*          |
-
-**Atributos que se inyectan en el modelo (`GET /users`):**
-
-| Atributo   | Tipo            | Descripción                          |
-|------------|-----------------|--------------------------------------|
-| `users`    | `List<UserDto>` | Lista de usuarios del sistema        |
-| `username` | `String`        | Nombre del usuario autenticado       |
+**Body:**
+```json
+{ "user": "admin", "password": "admin123" }
+```
+**Response 200:**
+```json
+{
+  "status": 200,
+  "data": { "token": "eyJ...", "username": "admin" },
+  "message": "Login exitoso"
+}
+```
+**Response 401:**
+```json
+{ "status": 401, "message": "Credenciales incorrectas", "errorCode": "INVALID_CREDENTIALS" }
+```
 
 ---
 
-## Administración — `AdministracionController`
+## Empleados — `EmpleadoController` (`/api/v1/empleados`)
 
-### Roles y permisos
+| Método | Ruta                     | Descripción                                        |
+|--------|--------------------------|----------------------------------------------------|
+| GET    | `/api/v1/empleados`      | Lista todos los empleados ordenados por nombre     |
+| GET    | `/api/v1/empleados/{id}` | Obtiene un empleado por su ID                      |
+| POST   | `/api/v1/empleados`      | Crea un nuevo empleado                             |
+| PUT    | `/api/v1/empleados/{id}` | Actualiza nombre y nómina de un empleado existente |
+| DELETE | `/api/v1/empleados/{id}` | Elimina un empleado por su ID                      |
 
-| Método | Ruta                    | Vista / Acción                                          |
-|--------|-------------------------|---------------------------------------------------------|
-| GET    | `/roles`                | `templates/admin/roles.html` — listado de roles        |
-| POST   | `/roles`                | Crea un nuevo rol → `redirect:/roles`                  |
-| POST   | `/roles/{id}`           | Edita un rol existente → `redirect:/roles`             |
-| POST   | `/roles/{id}/status`    | Cambia estatus del rol → `redirect:/roles`             |
-
-### Configuración del sistema (CU-005)
-
-| Método | Ruta                                | Vista / Acción                                              |
-|--------|-------------------------------------|-------------------------------------------------------------|
-| GET    | `/settings`                         | `templates/admin/settings.html` — tabs Seguridad/Alertas/Reportes |
-| POST   | `/settings/seguridad`               | Guarda configuración de seguridad → `redirect:/settings?tab=seguridad` |
-| POST   | `/settings/alertas/{id}/editar`     | Edita destinatarios de una alerta → `redirect:/settings?tab=alertas` |
-| POST   | `/settings/alertas/{id}/estatus`    | Cambia estatus de una alerta → `redirect:/settings?tab=alertas` |
-| POST   | `/settings/reportes/{id}/formato`   | Cambia formato de descarga de un reporte → `redirect:/settings?tab=reportes` |
-
-**Parámetros de filtro (GET `/settings`):**
-
-| Parámetro        | Descripción                                 |
-|------------------|---------------------------------------------|
-| `tab`            | Pestaña activa: `seguridad`, `alertas`, `reportes` |
-| `centralId`      | Filtro por central (alertas y reportes)     |
-| `tipoAlertaId`   | Filtro por tipo de alerta                   |
-| `activo`         | Filtro por estatus de alerta (`true`/`false`) |
-| `tipoReporteId`  | Filtro por tipo de reporte                  |
+**Body POST/PUT:**
+```json
+{ "nombre": "JUAN PEREZ", "nomina": 100001 }
+```
 
 ---
 
-## Reportes *(pendientes de implementar)*
+## Herramientas y Bitácora — `ProductController` (`api/v1/`)
 
-| navKey      | Ruta                 | Menú         |
-|-------------|----------------------|--------------|
-| `saltillo`  | `/reports/saltillo`  | Saltillo CSO |
-| `lomas`     | `/reports/lomas`     | Lomas CLR    |
-| `anahuac`   | `/reports/anahuac`   | Anáhuac CAC  |
-| `valle`     | `/reports/valle`     | Valle CVH    |
-| `eea`       | `/reports/eea`       | EEA          |
+| Método | Ruta                                | Descripción                                                                   |
+|--------|-------------------------------------|-------------------------------------------------------------------------------|
+| GET    | `/api/v1/dashboard`                 | Estadísticas de herramientas: total, prestadas, disponibles por categoría     |
+| GET    | `/api/v1/products`                  | Lista todas las herramientas (incluye cantidad_total y cantidad_disponible)   |
+| GET    | `/api/v1/productsActivos`           | Lista herramientas con estatus activo                                         |
+| GET    | `/api/v1/bitacora`                  | Lista el histórico de asignaciones (bitácora)                                 |
+| POST   | `/api/v1/saveHerramienta`           | Crea una nueva herramienta (campo `cantidadTotal` obligatorio)                |
+| POST   | `/api/v1/asignar`                   | Asigna una herramienta a un empleado (valida disponibilidad)                  |
+| PUT    | `/api/v1/actualizar`                | Marca asignación como devuelta e incrementa cantidad disponible               |
+| PUT    | `/api/v1/inactivarHerramienta/{id}` | Activa o desactiva una herramienta (toggle)                                   |
 
----
+**Body POST /saveHerramienta:**
+```json
+{ "nombre": "Taladro", "categoria": "Eléctrico", "estatus": true, "cantidadTotal": 2 }
+```
 
-## Auditoría — `AuditoriaController`
-
-| Método | Ruta     | Vista / Acción                              |
-|--------|----------|---------------------------------------------|
-| GET    | `/audit` | `templates/monitoring/audit.html` — listado de eventos con filtros y paginación |
-
-**Parámetros de filtro (GET `/audit`):**
-
-| Parámetro    | Descripción                                            |
-|--------------|--------------------------------------------------------|
-| `fechaDesde` | Fecha de inicio del rango (formato ISO `yyyy-MM-dd`)   |
-| `fechaHasta` | Fecha de fin del rango (formato ISO `yyyy-MM-dd`)      |
-| `usuario`    | Filtro por nombre de usuario exacto                    |
-| `modulo`     | Filtro por módulo del sistema                          |
-| `page`       | Número de página base 0 (por defecto: 0)               |
-| `size`       | Registros por página (por defecto: 10)                 |
-
-**Atributos que se inyectan en el modelo:**
-
-| Atributo            | Tipo                  | Descripción                                           |
-|---------------------|-----------------------|-------------------------------------------------------|
-| `registros`         | `List<AuditoriaDto>`  | Registros de la página actual                         |
-| `totalElements`     | `long`                | Total de registros filtrados                          |
-| `totalPages`        | `int`                 | Total de páginas                                      |
-| `currentPage`       | `int`                 | Página activa (base 0)                                |
-| `pageSize`          | `int`                 | Tamaño de página                                      |
-| `fromEl` / `toEl`   | `long`                | Rango visible (e.g. 1–10)                             |
-| `startPage` / `endPage` | `int`             | Rango de botones de paginación                        |
-| `usuarios`          | `List<String>`        | Usuarios con actividad (para selector de filtro)      |
-| `filtroFechaDesde`  | `String`              | Valor actual del filtro de fecha inicio               |
-| `filtroFechaHasta`  | `String`              | Valor actual del filtro de fecha fin                  |
-| `filtroUsuario`     | `String`              | Valor actual del filtro de usuario                    |
-| `filtroModulo`      | `String`              | Valor actual del filtro de módulo                     |
-
----
-
-## Autorización de Correcciones — `AutorizacionController`
-
-| Método | Ruta                               | Vista / Acción                                                        |
-|--------|------------------------------------|-----------------------------------------------------------------------|
-| GET    | `/authorization`                   | `templates/monitoring/authorization.html` — tabla de incidencias con filtros y paginación |
-| POST   | `/authorization/{id}/aprobar`      | Aprueba la corrección → `redirect:/authorization` con `successMsg`    |
-| POST   | `/authorization/{id}/rechazar`     | Rechaza la corrección → `redirect:/authorization` con `successMsg`    |
-
-**Parámetros de filtro (GET `/authorization`):**
-
-| Parámetro   | Descripción                                                      |
-|-------------|------------------------------------------------------------------|
-| `central`   | Filtro por nombre de central exacto                              |
-| `categoria` | Filtro por categoría: `Reporte incompleto` / `Reporte no generado` |
-| `revisor`   | Búsqueda parcial por nombre de revisor (case-insensitive)        |
-| `page`      | Número de página base 0 (por defecto: 0)                         |
-| `size`      | Registros por página (por defecto: 10)                           |
-
-**Atributos que se inyectan en el modelo:**
-
-| Atributo             | Tipo                        | Descripción                                             |
-|----------------------|-----------------------------|---------------------------------------------------------|
-| `incidencias`        | `List<AutorizacionListDto>` | Registros de la página actual                           |
-| `totalElements`      | `long`                      | Total de incidencias filtradas                          |
-| `totalPages`         | `int`                       | Total de páginas                                        |
-| `currentPage`        | `int`                       | Página activa (base 0)                                  |
-| `pageSize`           | `int`                       | Tamaño de página                                        |
-| `fromEl` / `toEl`    | `long`                      | Rango visible (e.g. 1–10)                               |
-| `startPage` / `endPage` | `int`                    | Rango de botones de paginación                          |
-| `centrales`          | `List<String>`              | Centrales disponibles para el selector de filtro        |
-| `filtroCentral`      | `String`                    | Valor actual del filtro de central                      |
-| `filtroCategoria`    | `String`                    | Valor actual del filtro de categoría                    |
-| `filtroRevisor`      | `String`                    | Valor actual del filtro de revisor                      |
-
----
-
-## Monitoreo y alertas *(pendientes de implementar — MonitoreoController)*
-
-| navKey      | Ruta         | Menú        |
-|-------------|--------------|-------------|
-| `incidents` | `/incidents` | Incidencias |
-| `bitacora`  | `/bitacora`  | Bitácora    |
-
----
-
-## Errores — Spring Boot `BasicErrorController`
-
-| Método | Ruta    | Vista / Acción                              |
-|--------|---------|---------------------------------------------|
-| GET    | `/error` *(404)* | `templates/error/404.html`       |
-
-> Activado con `spring.mvc.throw-exception-if-no-handler-found: true` y
-> `spring.web.resources.add-mappings: false` en `application.yaml`.
+**Response GET /dashboard:**
+```json
+{
+  "status": 200,
+  "data": {
+    "totalTipos": 5,
+    "totalUnidades": 12,
+    "totalPrestadas": 3,
+    "totalDisponibles": 9,
+    "porCategoria": [
+      { "categoria": "Eléctrico", "totalUnidades": 5, "prestadas": 2, "disponibles": 3 }
+    ],
+    "prestamosActivos": [
+      { "id": 1, "nombreEmpleado": "Juan", "nombreHerramienta": "Multímetro", "fecha": "2026-03-22", "diasPrestado": 5, "alerta": "ROJO" },
+      { "id": 3, "nombreEmpleado": "Pedro", "nombreHerramienta": "Pinzas",    "fecha": "2026-03-24", "diasPrestado": 3, "alerta": "AMARILLO" },
+      { "id": 5, "nombreEmpleado": "Luis",  "nombreHerramienta": "Taladro",   "fecha": "2026-03-26", "diasPrestado": 1, "alerta": "VERDE" }
+    ]
+  }
+}
+```
+Semáforo `alerta`: `VERDE` 0–2 días · `AMARILLO` 3–4 días · `ROJO` 5+ días
 
 ---
 
@@ -187,12 +94,7 @@ Las columnas **Vista / Acción** indican la plantilla Thymeleaf renderizada o el
 
 | Método | Total |
 |--------|-------|
-| GET    | 13    |
-| POST   | 11    |
-| PUT    | —     |
-| DELETE | —     |
-
----
-
-> **Nota:** Las rutas marcadas como *pendiente de implementar* están mapeadas y registradas
-> en el controlador pero redirigen al listado hasta que se habilite la capa de persistencia (JPA).
+| GET    | 8     |
+| POST   | 3     |
+| PUT    | 3     |
+| DELETE | 1     |

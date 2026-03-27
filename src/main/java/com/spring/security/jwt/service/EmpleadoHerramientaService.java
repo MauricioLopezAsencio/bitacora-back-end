@@ -33,23 +33,25 @@ public class EmpleadoHerramientaService {
     // Método para asignar una herramienta a un empleado
     @Transactional
     public EmpleadoHerramientaModel asignarHerramientaAEmpleado(EmpleadoHerramientaDTO dto) {
-        // Buscar el empleado por ID
         EmpleadoModel empleado = empleadoRepository.findById(dto.getEmpleadoId())
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado"));
 
-        // Buscar la herramienta por ID
         HerramientaModel herramienta = herramientaRepository.findById(dto.getHerramientaId())
                 .orElseThrow(() -> new RuntimeException("Herramienta no encontrada"));
 
-        // Crear la relación empleado-herramienta
+        if (herramienta.getCantidadDisponible() == null || herramienta.getCantidadDisponible() <= 0) {
+            throw new RuntimeException("No hay unidades disponibles de '" + herramienta.getNombre() + "' para préstamo");
+        }
+
         EmpleadoHerramientaModel empleadoHerramienta = new EmpleadoHerramientaModel();
         empleadoHerramienta.setEmpleado(empleado);
         empleadoHerramienta.setHerramienta(herramienta);
         empleadoHerramienta.setFecha(LocalDate.now());
         empleadoHerramienta.setEstatus(false);
 
-        // Guardar la relación en la tabla pivote
-        return empleadoHerramientaRepository.save(empleadoHerramienta);
+        EmpleadoHerramientaModel guardado = empleadoHerramientaRepository.save(empleadoHerramienta);
+        herramientaRepository.decrementarDisponible(herramienta.getId());
+        return guardado;
     }
 
     // Método para obtener todas las relaciones de empleado y herramienta
@@ -115,7 +117,9 @@ public class EmpleadoHerramientaService {
         }
 
         empleadoHerramienta.setEstatus(true);
-        return empleadoHerramientaRepository.save(empleadoHerramienta);
+        EmpleadoHerramientaModel devuelta = empleadoHerramientaRepository.save(empleadoHerramienta);
+        herramientaRepository.incrementarDisponible(empleadoHerramienta.getHerramienta().getId());
+        return devuelta;
     }
 
 }

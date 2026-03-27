@@ -8,5 +8,7 @@ import java.util.Optional;
 
 public interface IHerramientaRepository {
     Optional<HerramientaModel> findById(Long herramientaId);
-    public List<HerramientaModel> findAll();
+    List<HerramientaModel> findAll();
+    void decrementarDisponible(Long herramientaId);
+    void incrementarDisponible(Long herramientaId);
 }

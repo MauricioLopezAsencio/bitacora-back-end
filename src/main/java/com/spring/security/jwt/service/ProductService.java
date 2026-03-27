@@ -1,5 +1,6 @@
 package com.spring.security.jwt.service;
 
+import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
 import com.spring.security.jwt.model.HerramientaModel;
 import com.spring.security.jwt.repository.impl.IProductResository;
@@ -47,5 +48,8 @@ public class ProductService implements  IProductService{
         return iProductResository.toggleEstatus(id);
     }
 
-
+    @Override
+    public DashboardDto getDashboard() {
+        return iProductResository.getDashboard();
+    }
 }

@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface IEmpleadoRepository {
- public List<EmpleadoModel>  findAll();
-
- Optional<EmpleadoModel> findById(Long empleadoId);
+    List<EmpleadoModel> findAll();
+    Optional<EmpleadoModel> findById(Long id);
+    EmpleadoModel save(EmpleadoModel empleado);
+    EmpleadoModel update(Long id, EmpleadoModel empleado);
+    void deleteById(Long id);
 }

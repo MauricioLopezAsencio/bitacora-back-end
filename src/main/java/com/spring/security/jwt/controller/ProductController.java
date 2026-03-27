@@ -1,16 +1,15 @@
 package com.spring.security.jwt.controller;
 
+import com.spring.security.jwt.dto.ApiResponse;
 import com.spring.security.jwt.dto.BitacoraDto;
+import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.EmpleadoHerramientaDTO;
 import com.spring.security.jwt.dto.HerramientaDto;
 import com.spring.security.jwt.model.EmpleadoHerramientaModel;
-import com.spring.security.jwt.model.EmpleadoModel;
 import com.spring.security.jwt.model.HerramientaModel;
-import com.spring.security.jwt.repository.impl.IEmpleadoRepository;
 import com.spring.security.jwt.service.EmpleadoHerramientaService;
 import com.spring.security.jwt.service.IProductService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,8 +30,11 @@ public class ProductController {
     @Autowired
     EmpleadoHerramientaService empleadoHerramientaService;
 
-    @Autowired
-    IEmpleadoRepository iEmpleadosRepository;
+    @GetMapping("/dashboard")
+    public ResponseEntity<ApiResponse<DashboardDto>> dashboard() {
+        DashboardDto data = iProductService.getDashboard();
+        return ResponseEntity.ok(ApiResponse.ok(data, "Estadísticas del dashboard"));
+    }
 
     @GetMapping("/products")
     public ResponseEntity<?> listProducts() {
@@ -45,11 +47,6 @@ public class ProductController {
         return new ResponseEntity<>(products, HttpStatus.OK);
     }
 
-    @GetMapping("/empleados")
-    public ResponseEntity<?> listempleados() {
-        List<EmpleadoModel> empleados = this.iEmpleadosRepository.findAll();
-        return new ResponseEntity<>(empleados, HttpStatus.OK);
-    }
     @GetMapping("/bitacora")
     public ResponseEntity<List<BitacoraDto>> bitacora() {
         List<BitacoraDto> bitacoraDto = empleadoHerramientaService.findAll();
