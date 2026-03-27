@@ -4,4 +4,16 @@
 <p align="center">
 ESTE ES EL BACKEND DE BITACORA 
 </p>
+  Opciones realmente gratis para siempre:                                                                                                                                                                                           
 
+┌────────────┬───────────────────────┬────────────────────────────────────┐
+│ Plataforma │        Precio         │               Límite               │
+├────────────┼───────────────────────┼────────────────────────────────────┤
+│ Koyeb      │ Gratis                │ 1 servicio, 512MB RAM              │
+├────────────┼───────────────────────┼────────────────────────────────────┤
+│ Render     │ Gratis                │ Se duerme tras inactividad         │
+├────────────┼───────────────────────┼────────────────────────────────────┤
+│ Railway    │ $5 crédito/mes gratis │ Suficiente para un backend pequeño │
+├────────────┼───────────────────────┼────────────────────────────────────┤
+│ Fly.io     │ Gratis                │ 3 VMs pequeñas                     │
+└────────────┴───────────────────────┴────────────────────────────────────┘
