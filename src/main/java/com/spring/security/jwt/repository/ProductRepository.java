@@ -34,7 +34,7 @@ public class ProductRepository implements IProductResository {
 
     @Override
     public List<HerramientaModel> findAllActivo() {
-        String SQL = "SELECT * FROM cat_herramientas WHERE estatus = true";
+        String SQL = "SELECT * FROM cat_herramientas WHERE estatus = true AND cantidad_disponible > 0";
         return jdbcTemplate.query(SQL, BeanPropertyRowMapper.newInstance(HerramientaModel.class));
     }
 
