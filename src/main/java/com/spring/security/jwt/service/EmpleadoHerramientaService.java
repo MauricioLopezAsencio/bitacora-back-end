@@ -1,6 +1,7 @@
 package com.spring.security.jwt.service;
 
 import com.spring.security.jwt.dto.BitacoraDto;
+import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.EmpleadoHerramientaDTO;
 import com.spring.security.jwt.model.EmpleadoHerramientaModel;
 import com.spring.security.jwt.model.EmpleadoModel;
@@ -8,17 +9,26 @@ import com.spring.security.jwt.model.HerramientaModel;
 import com.spring.security.jwt.repository.EmpleadoRepository;
 import com.spring.security.jwt.repository.HerramientaRepository;
 import com.spring.security.jwt.repository.impl.EmpleadoHerramientaRepository;
+import com.spring.security.jwt.exception.NegocioException;
+import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class EmpleadoHerramientaService {
 
     @Autowired
@@ -30,28 +40,107 @@ public class EmpleadoHerramientaService {
     @Autowired
     private EmpleadoHerramientaRepository empleadoHerramientaRepository;
 
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private IProductService iProductService;
+
+    @Autowired
+    private TaskScheduler taskScheduler;
+
+    @Value("${app.turno.duracion-horas:12}")
+    private long duracionTurnoHoras;
+
     // Método para asignar una herramienta a un empleado
     @Transactional
     public EmpleadoHerramientaModel asignarHerramientaAEmpleado(EmpleadoHerramientaDTO dto) {
         EmpleadoModel empleado = empleadoRepository.findById(dto.getEmpleadoId())
-                .orElseThrow(() -> new RuntimeException("Empleado no encontrado"));
+                .orElseThrow(() -> new NegocioException("Empleado no encontrado con id: " + dto.getEmpleadoId()));
 
         HerramientaModel herramienta = herramientaRepository.findById(dto.getHerramientaId())
-                .orElseThrow(() -> new RuntimeException("Herramienta no encontrada"));
+                .orElseThrow(() -> new NegocioException("Herramienta no encontrada con id: " + dto.getHerramientaId()));
 
         if (herramienta.getCantidadDisponible() == null || herramienta.getCantidadDisponible() <= 0) {
-            throw new RuntimeException("No hay unidades disponibles de '" + herramienta.getNombre() + "' para préstamo");
+            throw new NegocioException("No hay unidades disponibles de '" + herramienta.getNombre() + "' para préstamo");
         }
+
+        String turno = (dto.getTurno() != null && dto.getTurno().equalsIgnoreCase("NOCHE"))
+                ? "NOCHE" : "DIA";
 
         EmpleadoHerramientaModel empleadoHerramienta = new EmpleadoHerramientaModel();
         empleadoHerramienta.setEmpleado(empleado);
         empleadoHerramienta.setHerramienta(herramienta);
         empleadoHerramienta.setFecha(LocalDate.now());
         empleadoHerramienta.setEstatus(false);
+        empleadoHerramienta.setTurno(turno);
+        empleadoHerramienta.setFcAsignacion(LocalDateTime.now());
 
         EmpleadoHerramientaModel guardado = empleadoHerramientaRepository.save(empleadoHerramienta);
         herramientaRepository.decrementarDisponible(herramienta.getId());
+
+        final Long   asignacionId = guardado.getId();
+        final String empNombre   = empleado.getNombre();
+        final String herrNombre  = herramienta.getNombre();
+        final String turnoFinal  = turno;
+        final LocalDate fechaFinal = guardado.getFecha();
+
+        // KPI de esta herramienta (post-decremento estimado) para el correo inmediato
+        int totalH      = herramienta.getCantidadTotal() != null ? herramienta.getCantidadTotal() : 0;
+        int dispH       = Math.max(0, (herramienta.getCantidadDisponible() != null
+                            ? herramienta.getCantidadDisponible() : 0) - 1);
+        int prestadasH  = totalH - dispH;
+
+        // Email 1: confirmación inmediata al registrar el préstamo
+        emailService.enviarRecordatorioPrestamo(empNombre, herrNombre, turnoFinal, fechaFinal,
+                totalH, dispH, prestadasH);
+
+        // Email 2: recordatorio 30 min antes de que termine el turno
+        // Solo se envía si la herramienta sigue sin devolverse; usa dashboard global en ese momento
+        Instant finTurno = guardado.getFcAsignacion()
+                .plusHours(duracionTurnoHoras)
+                .minusMinutes(30)
+                .atZone(ZoneId.systemDefault())
+                .toInstant();
+        taskScheduler.schedule(() ->
+            empleadoHerramientaRepository.findById(asignacionId).ifPresent(asignacion -> {
+                if (!asignacion.isEstatus()) {
+                    DashboardDto dashboard = iProductService.getDashboard();
+                    emailService.enviarRecordatorioFinTurno(empNombre, herrNombre, turnoFinal, fechaFinal, dashboard);
+                }
+            }),
+            finTurno
+        );
+
         return guardado;
+    }
+
+    @PostConstruct
+    public void recuperarRecordatoriosPendientes() {
+        List<EmpleadoHerramientaModel> activas = empleadoHerramientaRepository
+                .findActivasPendientesRecordatorio();
+        for (EmpleadoHerramientaModel a : activas) {
+            Instant finTurno = a.getFcAsignacion()
+                    .plusHours(duracionTurnoHoras)
+                    .minusMinutes(30)
+                    .atZone(ZoneId.systemDefault())
+                    .toInstant();
+            if (finTurno.isAfter(Instant.now())) {
+                final Long asignacionId  = a.getId();
+                final String empNombre   = a.getEmpleado().getNombre();
+                final String herrNombre  = a.getHerramienta().getNombre();
+                final String turno       = a.getTurno();
+                final LocalDate fecha    = a.getFecha();
+                taskScheduler.schedule(() ->
+                    empleadoHerramientaRepository.findById(asignacionId).ifPresent(asig -> {
+                        if (!asig.isEstatus()) {
+                            DashboardDto dashboard = iProductService.getDashboard();
+                            emailService.enviarRecordatorioFinTurno(empNombre, herrNombre, turno, fecha, dashboard);
+                        }
+                    }), finTurno);
+                log.info("Recordatorio re-agendado asignacion={} finTurno={}", asignacionId, finTurno);
+            }
+        }
     }
 
     // Método para obtener todas las relaciones de empleado y herramienta
@@ -90,8 +179,9 @@ public class EmpleadoHerramientaService {
             bitacoraDto.setId(ehModel.getId());
             bitacoraDto.setNombreEmpleado(nombreEmpleado);
             bitacoraDto.setNombreHerramienta(nombreHerramienta);
-            bitacoraDto.setEstatus(ehModel.isEstatus()); // Asume que tienes un método isEstatus en tu modelo
-            bitacoraDto.setFecha(ehModel.getFecha()); // Establecer la fecha actual
+            bitacoraDto.setEstatus(ehModel.isEstatus());
+            bitacoraDto.setFecha(ehModel.getFecha());
+            bitacoraDto.setTurno(ehModel.getTurno());
 
             response.add(bitacoraDto);
         }
@@ -102,17 +192,17 @@ public class EmpleadoHerramientaService {
     @Transactional
     public EmpleadoHerramientaModel actualizarEstatus(BitacoraDto dto) {
         if (!dto.isEstatus()) {
-            throw new RuntimeException(
+            throw new NegocioException(
                 "No se puede desactivar una asignación. Si el empleado tomó la herramienta nuevamente, registre una nueva asignación."
             );
         }
 
         EmpleadoHerramientaModel empleadoHerramienta = empleadoHerramientaRepository.findById(dto.getId())
-                .orElseThrow(() -> new RuntimeException("Relación empleado-herramienta no encontrada"));
+                .orElseThrow(() -> new NegocioException("Relación empleado-herramienta no encontrada con id: " + dto.getId()));
 
         if (empleadoHerramienta.isEstatus()) {
-            throw new RuntimeException(
-                "Esta asignación ya está activa. Si el empleado tomó la herramienta nuevamente, registre una nueva asignación."
+            throw new NegocioException(
+                "Esta asignación ya fue devuelta. Si el empleado tomó la herramienta nuevamente, registre una nueva asignación."
             );
         }
 

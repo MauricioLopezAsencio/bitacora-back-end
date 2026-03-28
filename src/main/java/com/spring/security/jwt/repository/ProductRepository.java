@@ -4,6 +4,7 @@ import com.spring.security.jwt.dto.CategoriaStatsDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
 import com.spring.security.jwt.dto.PrestamoActivoDto;
+import com.spring.security.jwt.exception.NegocioException;
 import com.spring.security.jwt.model.HerramientaModel;
 import com.spring.security.jwt.repository.impl.IProductResository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,7 +64,7 @@ public class ProductRepository implements IProductResository {
         String sql = "UPDATE cat_herramientas SET estatus = NOT estatus WHERE id = ? RETURNING estatus";
         Boolean nuevoEstatus = jdbcTemplate.queryForObject(sql, Boolean.class, id);
         if (nuevoEstatus == null) {
-            throw new RuntimeException("No se encontró ninguna herramienta con el id: " + id);
+            throw new NegocioException("No se encontró ninguna herramienta con el id: " + id);
         }
         return nuevoEstatus;
     }
@@ -98,6 +99,7 @@ public class ProductRepository implements IProductResository {
                     e.nombre  AS nombre_empleado,
                     h.nombre  AS nombre_herramienta,
                     eh.fecha,
+                    eh.turno,
                     (CURRENT_DATE - eh.fecha) AS dias_prestado
                 FROM empleado_herramienta eh
                 JOIN cat_empleados    e ON e.id = eh.empleado_id
@@ -118,12 +120,16 @@ public class ProductRepository implements IProductResository {
         );
 
         List<PrestamoActivoDto> prestamosActivos = jdbcTemplate.query(sqlPrestamos, (rs, rowNum) -> {
-            int dias = rs.getInt("dias_prestado");
+            int       dias   = rs.getInt("dias_prestado");
+            LocalDate fecha  = rs.getObject("fecha", LocalDate.class);
+            String    turno  = rs.getString("turno");
             return PrestamoActivoDto.builder()
                     .id(rs.getLong("id"))
                     .nombreEmpleado(rs.getString("nombre_empleado"))
                     .nombreHerramienta(rs.getString("nombre_herramienta"))
-                    .fecha(rs.getObject("fecha", LocalDate.class))
+                    .fecha(fecha)
+                    .turno(turno)
+                    .turnoActivo(PrestamoActivoDto.calcularTurnoActivo(turno, fecha))
                     .diasPrestado(dias)
                     .alerta(PrestamoActivoDto.calcularAlerta(dias))
                     .build();

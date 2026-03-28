@@ -41,6 +41,15 @@ public class GlobalExceptionHandler {
                         .path(request.getRequestURI()).build());
     }
 
+    @ExceptionHandler(NegocioException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNegocio(
+            NegocioException ex, HttpServletRequest request) {
+        log.warn("Regla de negocio violada path={} mensaje={}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(409)
+                .body(ApiResponse.error(409, ex.getMessage(), "NEGOCIO_ERROR").toBuilder()
+                        .path(request.getRequestURI()).build());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(
             Exception ex, HttpServletRequest request) {

@@ -15,5 +15,6 @@ public class BitacoraDto {
     private String nombreHerramienta;
     private boolean estatus;
     private LocalDate fecha;
+    private String turno;
 
 }
