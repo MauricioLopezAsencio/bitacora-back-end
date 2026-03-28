@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,8 +66,7 @@ public class EmpleadoHerramientaService {
             throw new NegocioException("No hay unidades disponibles de '" + herramienta.getNombre() + "' para préstamo");
         }
 
-        String turno = (dto.getTurno() != null && dto.getTurno().equalsIgnoreCase("NOCHE"))
-                ? "NOCHE" : "DIA";
+        String turno = normalizarTurno(dto.getTurno());
 
         EmpleadoHerramientaModel empleadoHerramienta = new EmpleadoHerramientaModel();
         empleadoHerramienta.setEmpleado(empleado);
@@ -100,11 +100,8 @@ public class EmpleadoHerramientaService {
 
         // Email 2: recordatorio 30 min antes de que termine el turno
         // Solo se envía si la herramienta sigue sin devolverse; usa dashboard global en ese momento
-        Instant finTurno = guardado.getFcAsignacion()
-                .plusHours(duracionTurnoHoras)
-                .minusMinutes(30)
-                .atZone(ZoneId.systemDefault())
-                .toInstant();
+        Instant finTurno = calcularFinTurno(turno, guardado.getFecha(), guardado.getFcAsignacion())
+                .minusSeconds(30 * 60);
         log.info("Recordatorio programado asignacionId={} finTurno={}", asignacionId, finTurno);
         taskScheduler.schedule(() ->
             empleadoHerramientaRepository.findById(asignacionId).ifPresent(asignacion -> {
@@ -128,11 +125,8 @@ public class EmpleadoHerramientaService {
         List<EmpleadoHerramientaModel> activas = empleadoHerramientaRepository
                 .findActivasPendientesRecordatorio();
         for (EmpleadoHerramientaModel a : activas) {
-            Instant finTurno = a.getFcAsignacion()
-                    .plusHours(duracionTurnoHoras)
-                    .minusMinutes(30)
-                    .atZone(ZoneId.systemDefault())
-                    .toInstant();
+            Instant finTurno = calcularFinTurno(a.getTurno(), a.getFecha(), a.getFcAsignacion())
+                    .minusSeconds(30 * 60);
             if (finTurno.isAfter(Instant.now())) {
                 final Long asignacionId  = a.getId();
                 final String empNombre   = a.getEmpleado().getNombre();
@@ -195,6 +189,46 @@ public class EmpleadoHerramientaService {
         }
 
         return response;
+    }
+
+    // ── Helpers de turno ──────────────────────────────────────────────────────
+
+    /**
+     * Acepta MATUTINO, VESPERTINO o NOCTURNO (insensible a mayúsculas).
+     * Cualquier otro valor se trata como MATUTINO por defecto.
+     */
+    private String normalizarTurno(String turno) {
+        if (turno == null) return "MATUTINO";
+        return switch (turno.toUpperCase()) {
+            case "VESPERTINO" -> "VESPERTINO";
+            case "NOCTURNO"   -> "NOCTURNO";
+            default           -> "MATUTINO";
+        };
+    }
+
+    /**
+     * Devuelve el {@link Instant} exacto en que finaliza el turno:
+     * <ul>
+     *   <li>MATUTINO  → 14:00 del día de asignación</li>
+     *   <li>VESPERTINO → 22:00 del día de asignación</li>
+     *   <li>NOCTURNO  → 06:00 del día siguiente</li>
+     * </ul>
+     * Si por alguna razón el fin calculado ya pasó, se usa {@code asignacion + duracionTurnoHoras}
+     * como respaldo para no programar tareas en el pasado.
+     */
+    private Instant calcularFinTurno(String turno, LocalDate fecha, LocalDateTime asignacion) {
+        LocalDateTime fin = switch (turno.toUpperCase()) {
+            case "VESPERTINO" -> fecha.atTime(LocalTime.of(22, 0));
+            case "NOCTURNO"   -> fecha.plusDays(1).atTime(LocalTime.of(6, 0));
+            default           -> fecha.atTime(LocalTime.of(14, 0)); // MATUTINO
+        };
+        Instant resultado = fin.atZone(ZoneId.systemDefault()).toInstant();
+        // Respaldo: si ya pasó, usar la duración fija configurada
+        if (resultado.isBefore(Instant.now())) {
+            return asignacion.plusHours(duracionTurnoHoras)
+                    .atZone(ZoneId.systemDefault()).toInstant();
+        }
+        return resultado;
     }
 
     @Transactional

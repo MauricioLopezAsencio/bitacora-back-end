@@ -131,7 +131,7 @@ public class ProductRepository implements IProductResository {
                     .turno(turno)
                     .turnoActivo(PrestamoActivoDto.calcularTurnoActivo(turno, fecha))
                     .diasPrestado(dias)
-                    .alerta(PrestamoActivoDto.calcularAlerta(dias))
+                    .alerta(PrestamoActivoDto.calcularAlerta(dias, turno, fecha))
                     .build();
         });
 
