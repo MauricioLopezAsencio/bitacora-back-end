@@ -85,6 +85,9 @@ public class EmpleadoHerramientaService {
         final String turnoFinal  = turno;
         final LocalDate fechaFinal = guardado.getFecha();
 
+        log.info("Prestamo registrado asignacionId={} empleado={} herramienta={} turno={} fecha={}",
+                asignacionId, empNombre, herrNombre, turnoFinal, fechaFinal);
+
         // KPI de esta herramienta (post-decremento estimado) para el correo inmediato
         int totalH      = herramienta.getCantidadTotal() != null ? herramienta.getCantidadTotal() : 0;
         int dispH       = Math.max(0, (herramienta.getCantidadDisponible() != null
@@ -102,11 +105,16 @@ public class EmpleadoHerramientaService {
                 .minusMinutes(30)
                 .atZone(ZoneId.systemDefault())
                 .toInstant();
+        log.info("Recordatorio programado asignacionId={} finTurno={}", asignacionId, finTurno);
         taskScheduler.schedule(() ->
             empleadoHerramientaRepository.findById(asignacionId).ifPresent(asignacion -> {
                 if (!asignacion.isEstatus()) {
+                    log.info("Enviando recordatorio finTurno asignacionId={} empleado={} herramienta={}",
+                            asignacionId, empNombre, herrNombre);
                     DashboardDto dashboard = iProductService.getDashboard();
                     emailService.enviarRecordatorioFinTurno(empNombre, herrNombre, turnoFinal, fechaFinal, dashboard);
+                } else {
+                    log.info("Recordatorio omitido, herramienta ya devuelta asignacionId={}", asignacionId);
                 }
             }),
             finTurno
@@ -209,6 +217,10 @@ public class EmpleadoHerramientaService {
         empleadoHerramienta.setEstatus(true);
         EmpleadoHerramientaModel devuelta = empleadoHerramientaRepository.save(empleadoHerramienta);
         herramientaRepository.incrementarDisponible(empleadoHerramienta.getHerramienta().getId());
+        log.info("Herramienta devuelta asignacionId={} herramienta={} empleado={}",
+                devuelta.getId(),
+                devuelta.getHerramienta().getNombre(),
+                devuelta.getEmpleado().getNombre());
         return devuelta;
     }
 
