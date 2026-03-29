@@ -53,10 +53,10 @@ public class ProductController {
     }
 
     @GetMapping("/bitacora")
-    public ResponseEntity<List<BitacoraDto>> bitacora() {
+    public ResponseEntity<ApiResponse<List<BitacoraDto>>> bitacora() {
         log.info("GET /bitacora txId={}", MDC.get("transactionId"));
-        List<BitacoraDto> bitacoraDto = empleadoHerramientaService.findAll();
-        return new ResponseEntity<>(bitacoraDto, HttpStatus.OK);
+        List<BitacoraDto> bitacoraDto = iProductService.getBitacora();
+        return ResponseEntity.ok(ApiResponse.ok(bitacoraDto, "Bitácora de asignaciones"));
     }
 
     @PostMapping("/saveHerramienta")

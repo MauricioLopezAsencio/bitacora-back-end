@@ -1,6 +1,7 @@
 package com.spring.security.jwt.service;
 
 
+import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
 import com.spring.security.jwt.model.HerramientaModel;
@@ -13,4 +14,5 @@ public interface IProductService {
     HerramientaDto saveHerramienta(HerramientaDto herramienta);
     boolean toggleEstatus(Long id);
     DashboardDto getDashboard();
+    List<BitacoraDto> getBitacora();
 }

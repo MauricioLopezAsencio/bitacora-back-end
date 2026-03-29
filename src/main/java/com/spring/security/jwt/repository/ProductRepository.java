@@ -1,5 +1,6 @@
 package com.spring.security.jwt.repository;
 
+import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.CategoriaStatsDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
@@ -143,5 +144,32 @@ public class ProductRepository implements IProductResository {
                 .porCategoria(porCategoria)
                 .prestamosActivos(prestamosActivos)
                 .build();
+    }
+
+    @Override
+    public List<BitacoraDto> getBitacora() {
+        String sql = """
+                SELECT
+                    eh.id,
+                    e.nombre  AS nombre_empleado,
+                    h.nombre  AS nombre_herramienta,
+                    eh.estatus,
+                    eh.fecha,
+                    eh.turno
+                FROM empleado_herramienta eh
+                JOIN cat_empleados    e ON e.id = eh.empleado_id
+                JOIN cat_herramientas h ON h.id = eh.herramienta_id
+                ORDER BY eh.id DESC
+                """;
+        return jdbcTemplate.query(sql, (rs, rowNum) -> {
+            BitacoraDto dto = new BitacoraDto();
+            dto.setId(rs.getLong("id"));
+            dto.setNombreEmpleado(rs.getString("nombre_empleado"));
+            dto.setNombreHerramienta(rs.getString("nombre_herramienta"));
+            dto.setEstatus(rs.getBoolean("estatus"));
+            dto.setFecha(rs.getObject("fecha", LocalDate.class));
+            dto.setTurno(rs.getString("turno"));
+            return dto;
+        });
     }
 }

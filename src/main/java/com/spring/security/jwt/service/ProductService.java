@@ -1,5 +1,6 @@
 package com.spring.security.jwt.service;
 
+import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
 import com.spring.security.jwt.model.HerramientaModel;
@@ -51,5 +52,10 @@ public class ProductService implements  IProductService{
     @Override
     public DashboardDto getDashboard() {
         return iProductResository.getDashboard();
+    }
+
+    @Override
+    public List<BitacoraDto> getBitacora() {
+        return iProductResository.getBitacora();
     }
 }

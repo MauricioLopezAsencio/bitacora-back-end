@@ -1,5 +1,6 @@
 package com.spring.security.jwt.repository.impl;
 
+import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
 import com.spring.security.jwt.model.HerramientaModel;
@@ -12,4 +13,5 @@ public interface IProductResository {
     HerramientaDto save(HerramientaDto entity);
     boolean toggleEstatus(Long id);
     DashboardDto getDashboard();
+    List<BitacoraDto> getBitacora();
 }
