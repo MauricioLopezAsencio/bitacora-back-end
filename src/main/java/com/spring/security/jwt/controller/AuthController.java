@@ -46,9 +46,52 @@ public class AuthController {
         AuthResponseDto data = new AuthResponseDto();
         data.setToken(token);
         data.setUsername(userDetails.getUsername());
+        data.setExpiresAt(jwtService.extractExpiration(token));
 
         log.info("Login exitoso user={}", request.getUser());
         return ResponseEntity.ok(ApiResponse.ok(data, "Login exitoso")
+                .toBuilder().path(httpRequest.getRequestURI()).build());
+    }
+
+    /**
+     * Renueva el token si el actual aún es válido.
+     * El front debe llamar este endpoint antes de que expire (ej. cuando quedan 5 min).
+     * Si el token ya expiró, devuelve 401 y el front redirige al login.
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<?>> refresh(HttpServletRequest httpRequest) {
+        final String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.error(401, "Token no proporcionado", "MISSING_TOKEN")
+                            .toBuilder().path(httpRequest.getRequestURI()).build());
+        }
+
+        final String oldToken = authHeader.substring(7);
+        final String username;
+        try {
+            username = jwtService.extractUsername(oldToken);
+        } catch (Exception e) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.error(401, "Token inválido", "INVALID_TOKEN")
+                            .toBuilder().path(httpRequest.getRequestURI()).build());
+        }
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+        if (!jwtService.isTokenValid(oldToken, userDetails)) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.error(401, "Token expirado o inválido", "TOKEN_EXPIRED")
+                            .toBuilder().path(httpRequest.getRequestURI()).build());
+        }
+
+        String newToken = jwtService.generateToken(username);
+        AuthResponseDto data = new AuthResponseDto();
+        data.setToken(newToken);
+        data.setUsername(username);
+        data.setExpiresAt(jwtService.extractExpiration(newToken));
+
+        log.info("Token renovado user={}", username);
+        return ResponseEntity.ok(ApiResponse.ok(data, "Token renovado")
                 .toBuilder().path(httpRequest.getRequestURI()).build());
     }
 }
