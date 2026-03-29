@@ -4,7 +4,6 @@ import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.CategoriaStatsDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
-import com.spring.security.jwt.dto.PageResponse;
 import com.spring.security.jwt.dto.PrestamoActivoDto;
 import com.spring.security.jwt.exception.NegocioException;
 import com.spring.security.jwt.model.HerramientaModel;
@@ -162,50 +161,15 @@ public class ProductRepository implements IProductResository {
                 JOIN cat_herramientas h ON h.id = eh.herramienta_id
                 ORDER BY eh.id DESC
                 """;
-        return jdbcTemplate.query(sql, BITACORA_MAPPER);
+        return jdbcTemplate.query(sql, (rs, rowNum) -> {
+            BitacoraDto dto = new BitacoraDto();
+            dto.setId(rs.getLong("id"));
+            dto.setNombreEmpleado(rs.getString("nombre_empleado"));
+            dto.setNombreHerramienta(rs.getString("nombre_herramienta"));
+            dto.setEstatus(rs.getBoolean("estatus"));
+            dto.setFecha(rs.getObject("fecha", LocalDate.class));
+            dto.setTurno(rs.getString("turno"));
+            return dto;
+        });
     }
-
-    @Override
-    public PageResponse<BitacoraDto> getBitacoraPaginado(int page, int size) {
-        long total = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM empleado_herramienta", Long.class);
-
-        String sql = """
-                SELECT
-                    eh.id,
-                    e.nombre  AS nombre_empleado,
-                    h.nombre  AS nombre_herramienta,
-                    eh.estatus,
-                    eh.fecha,
-                    eh.turno
-                FROM empleado_herramienta eh
-                JOIN cat_empleados    e ON e.id = eh.empleado_id
-                JOIN cat_herramientas h ON h.id = eh.herramienta_id
-                ORDER BY eh.id DESC
-                LIMIT ? OFFSET ?
-                """;
-        List<BitacoraDto> content = jdbcTemplate.query(sql, BITACORA_MAPPER, size, (long) page * size);
-        int totalPages = (int) Math.ceil((double) total / size);
-
-        return PageResponse.<BitacoraDto>builder()
-                .content(content)
-                .page(page)
-                .size(size)
-                .totalElements(total)
-                .totalPages(totalPages)
-                .last(page >= totalPages - 1)
-                .build();
-    }
-
-    private static final org.springframework.jdbc.core.RowMapper<BitacoraDto> BITACORA_MAPPER =
-            (rs, rowNum) -> {
-                BitacoraDto dto = new BitacoraDto();
-                dto.setId(rs.getLong("id"));
-                dto.setNombreEmpleado(rs.getString("nombre_empleado"));
-                dto.setNombreHerramienta(rs.getString("nombre_herramienta"));
-                dto.setEstatus(rs.getBoolean("estatus"));
-                dto.setFecha(rs.getObject("fecha", LocalDate.class));
-                dto.setTurno(rs.getString("turno"));
-                return dto;
-            };
 }

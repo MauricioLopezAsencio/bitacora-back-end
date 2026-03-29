@@ -3,7 +3,6 @@ package com.spring.security.jwt.repository;
 import com.spring.security.jwt.model.EmpleadoModel;
 import com.spring.security.jwt.repository.impl.IEmpleadoRepository;
 import jakarta.persistence.EntityNotFoundException;
-import com.spring.security.jwt.dto.PageResponse;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -86,24 +85,5 @@ public class EmpleadoRepository implements IEmpleadoRepository {
         findById(id).orElseThrow(() ->
                 new EntityNotFoundException("Empleado no encontrado con id: " + id));
         jdbcTemplate.update("DELETE FROM cat_empleados WHERE id = ?", id);
-    }
-
-    @Override
-    public PageResponse<EmpleadoModel> findAllPaginado(int page, int size) {
-        long total = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cat_empleados", Long.class);
-
-        String sql = "SELECT id, nombre, nomina FROM cat_empleados ORDER BY nombre LIMIT ? OFFSET ?";
-        List<EmpleadoModel> content = jdbcTemplate.query(sql, EMPLEADO_MAPPER, size, (long) page * size);
-        int totalPages = (int) Math.ceil((double) total / size);
-
-        return PageResponse.<EmpleadoModel>builder()
-                .content(content)
-                .page(page)
-                .size(size)
-                .totalElements(total)
-                .totalPages(totalPages)
-                .last(page >= totalPages - 1)
-                .build();
     }
 }

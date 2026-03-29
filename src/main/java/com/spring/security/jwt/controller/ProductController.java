@@ -3,7 +3,6 @@ package com.spring.security.jwt.controller;
 import com.spring.security.jwt.dto.ApiResponse;
 import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.DashboardDto;
-import com.spring.security.jwt.dto.PageResponse;
 import com.spring.security.jwt.dto.EmpleadoHerramientaDTO;
 import com.spring.security.jwt.dto.HerramientaDto;
 import com.spring.security.jwt.model.EmpleadoHerramientaModel;
@@ -58,15 +57,6 @@ public class ProductController {
         log.info("GET /bitacora txId={}", MDC.get("transactionId"));
         List<BitacoraDto> bitacoraDto = iProductService.getBitacora();
         return ResponseEntity.ok(ApiResponse.ok(bitacoraDto, "Bitácora de asignaciones"));
-    }
-
-    @GetMapping("/bitacora/paginado")
-    public ResponseEntity<ApiResponse<PageResponse<BitacoraDto>>> bitacoraPaginado(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        log.info("GET /bitacora/paginado page={} size={} txId={}", page, size, MDC.get("transactionId"));
-        PageResponse<BitacoraDto> data = iProductService.getBitacoraPaginado(page, size);
-        return ResponseEntity.ok(ApiResponse.ok(data, "Bitácora paginada"));
     }
 
     @PostMapping("/saveHerramienta")

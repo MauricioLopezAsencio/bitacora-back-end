@@ -3,7 +3,6 @@ package com.spring.security.jwt.service;
 import com.spring.security.jwt.dto.EmpleadoCreateRequest;
 import com.spring.security.jwt.dto.EmpleadoResponseDto;
 import com.spring.security.jwt.dto.EmpleadoUpdateRequest;
-import com.spring.security.jwt.dto.PageResponse;
 import com.spring.security.jwt.model.EmpleadoModel;
 import com.spring.security.jwt.repository.impl.IEmpleadoRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -62,20 +61,6 @@ public class EmpleadoService implements IEmpeladoService {
     @Transactional
     public void deleteById(Long id) {
         empleadoRepository.deleteById(id);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PageResponse<EmpleadoResponseDto> findAllPaginado(int page, int size) {
-        PageResponse<EmpleadoModel> raw = empleadoRepository.findAllPaginado(page, size);
-        return PageResponse.<EmpleadoResponseDto>builder()
-                .content(raw.getContent().stream().map(this::toDto).toList())
-                .page(raw.getPage())
-                .size(raw.getSize())
-                .totalElements(raw.getTotalElements())
-                .totalPages(raw.getTotalPages())
-                .last(raw.isLast())
-                .build();
     }
 
     private EmpleadoResponseDto toDto(EmpleadoModel model) {
