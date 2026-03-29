@@ -100,7 +100,7 @@ public class ProductRepository implements IProductResository {
                     h.nombre  AS nombre_herramienta,
                     eh.fecha,
                     eh.turno,
-                    (CURRENT_DATE - eh.fecha) AS dias_prestado
+                    ((NOW() AT TIME ZONE 'America/Mexico_City')::date - eh.fecha) AS dias_prestado
                 FROM empleado_herramienta eh
                 JOIN cat_empleados    e ON e.id = eh.empleado_id
                 JOIN cat_herramientas h ON h.id = eh.herramienta_id

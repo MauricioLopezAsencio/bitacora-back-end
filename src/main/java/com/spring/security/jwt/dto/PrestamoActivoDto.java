@@ -50,7 +50,17 @@ public class PrestamoActivoDto {
     private static LocalDateTime calcularFinTurnoDt(String turno, LocalDate fecha) {
         return switch (turno.toUpperCase()) {
             case "VESPERTINO" -> fecha.atTime(LocalTime.of(22, 0));
-            case "NOCTURNO"   -> fecha.plusDays(1).atTime(LocalTime.of(6, 0));
+            case "NOCTURNO"   -> {
+                // Si ahora es antes de las 06:00, el turno activo termina HOY
+                // (la asignación fue entre medianoche y las 05:59).
+                // En cualquier otro momento, termina al día siguiente.
+                LocalTime ahora = LocalTime.now();
+                if (ahora.isBefore(LocalTime.of(6, 0))) {
+                    yield fecha.atTime(LocalTime.of(6, 0));
+                } else {
+                    yield fecha.plusDays(1).atTime(LocalTime.of(6, 0));
+                }
+            }
             default           -> fecha.atTime(LocalTime.of(14, 0)); // MATUTINO
         };
     }
@@ -78,8 +88,9 @@ public class PrestamoActivoDto {
                     && ahora.isBefore(LocalTime.of(22, 0));
         }
         // NOCTURNO: 22:00 del día de asignación → 06:00 del día siguiente
+        // También cubre asignaciones post-medianoche (00:00–05:59) donde fecha == hoy
         if (fecha.equals(hoy)) {
-            return !ahora.isBefore(LocalTime.of(22, 0));
+            return !ahora.isBefore(LocalTime.of(22, 0)) || ahora.isBefore(LocalTime.of(6, 0));
         }
         if (fecha.equals(hoy.minusDays(1))) {
             return ahora.isBefore(LocalTime.of(6, 0));

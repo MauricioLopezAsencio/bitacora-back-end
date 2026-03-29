@@ -219,7 +219,16 @@ public class EmpleadoHerramientaService {
     private Instant calcularFinTurno(String turno, LocalDate fecha, LocalDateTime asignacion) {
         LocalDateTime fin = switch (turno.toUpperCase()) {
             case "VESPERTINO" -> fecha.atTime(LocalTime.of(22, 0));
-            case "NOCTURNO"   -> fecha.plusDays(1).atTime(LocalTime.of(6, 0));
+            case "NOCTURNO"   -> {
+                // Si la asignación fue entre medianoche y 05:59, el turno nocturno
+                // ya inició ayer y termina HOY a las 06:00, no mañana.
+                LocalTime horaAsignacion = asignacion.toLocalTime();
+                if (horaAsignacion.isBefore(LocalTime.of(6, 0))) {
+                    yield fecha.atTime(LocalTime.of(6, 0));
+                } else {
+                    yield fecha.plusDays(1).atTime(LocalTime.of(6, 0));
+                }
+            }
             default           -> fecha.atTime(LocalTime.of(14, 0)); // MATUTINO
         };
         Instant resultado = fin.atZone(ZoneId.systemDefault()).toInstant();
