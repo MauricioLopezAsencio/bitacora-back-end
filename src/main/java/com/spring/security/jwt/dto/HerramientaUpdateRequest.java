@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class HerramientaDto {
+public class HerramientaUpdateRequest {
 
     @NotBlank(message = "El nombre es obligatorio")
     private String nombre;
@@ -18,9 +18,9 @@ public class HerramientaDto {
     @NotBlank(message = "La categoría es obligatoria")
     private String categoria;
 
-    private boolean estatus;
-
     @NotNull(message = "La cantidad total es obligatoria")
     @Min(value = 1, message = "La cantidad total debe ser al menos 1")
     private Integer cantidadTotal;
+
+    private boolean estatus;
 }

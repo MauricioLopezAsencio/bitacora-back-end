@@ -4,11 +4,14 @@ import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.CategoriaStatsDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
+import com.spring.security.jwt.dto.HerramientaResponseDto;
+import com.spring.security.jwt.dto.HerramientaUpdateRequest;
 import com.spring.security.jwt.dto.PrestamoActivoDto;
 import com.spring.security.jwt.exception.NegocioException;
 import com.spring.security.jwt.model.HerramientaModel;
 import com.spring.security.jwt.repository.impl.IProductResository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -20,6 +23,7 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Repository
 public class ProductRepository implements IProductResository {
@@ -39,6 +43,72 @@ public class ProductRepository implements IProductResository {
         return jdbcTemplate.query(SQL, BeanPropertyRowMapper.newInstance(HerramientaModel.class));
     }
 
+
+    @Override
+    public Optional<HerramientaModel> findById(Long id) {
+        String sql = "SELECT * FROM cat_herramientas WHERE id = ?";
+        try {
+            HerramientaModel h = jdbcTemplate.queryForObject(sql, new Object[]{id},
+                    BeanPropertyRowMapper.newInstance(HerramientaModel.class));
+            return Optional.ofNullable(h);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public HerramientaResponseDto update(Long id, HerramientaUpdateRequest request) {
+        // Valida que exista
+        HerramientaModel actual = findById(id)
+                .orElseThrow(() -> new NegocioException("No se encontró la herramienta con id: " + id));
+
+        // Calcula la nueva cantidad disponible conservando los préstamos activos
+        int prestadas = actual.getCantidadTotal() - actual.getCantidadDisponible();
+        int nuevaDisponible = Math.max(0, request.getCantidadTotal() - prestadas);
+
+        String sql = """
+                UPDATE cat_herramientas
+                SET nombre = ?, categoria = ?, cantidad_total = ?, cantidad_disponible = ?, estatus = ?
+                WHERE id = ?
+                """;
+        int rows = jdbcTemplate.update(sql,
+                request.getNombre(),
+                request.getCategoria(),
+                request.getCantidadTotal(),
+                nuevaDisponible,
+                request.isEstatus(),
+                id);
+
+        if (rows == 0) {
+            throw new NegocioException("No se pudo actualizar la herramienta con id: " + id);
+        }
+
+        return HerramientaResponseDto.builder()
+                .id(id)
+                .nombre(request.getNombre())
+                .categoria(request.getCategoria())
+                .cantidadTotal(request.getCantidadTotal())
+                .cantidadDisponible(nuevaDisponible)
+                .estatus(request.isEstatus())
+                .build();
+    }
+
+    @Override
+    public void delete(Long id) {
+        // Valida que no tenga préstamos activos antes de eliminar
+        String sqlCheck = "SELECT COUNT(*) FROM empleado_herramienta WHERE herramienta_id = ? AND estatus = false";
+        Integer prestamosActivos = jdbcTemplate.queryForObject(sqlCheck, Integer.class, id);
+        if (prestamosActivos != null && prestamosActivos > 0) {
+            throw new NegocioException(
+                    "No se puede eliminar la herramienta porque tiene " + prestamosActivos + " préstamo(s) activo(s).");
+        }
+
+        String sql = "DELETE FROM cat_herramientas WHERE id = ?";
+        int rows = jdbcTemplate.update(sql, id);
+        if (rows == 0) {
+            throw new NegocioException("No se encontró la herramienta con id: " + id);
+        }
+    }
 
     @Override
     public HerramientaDto save(HerramientaDto entity) {
