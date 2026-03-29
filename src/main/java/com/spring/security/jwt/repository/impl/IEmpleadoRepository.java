@@ -1,5 +1,6 @@
 package com.spring.security.jwt.repository.impl;
 
+import com.spring.security.jwt.dto.PageResponse;
 import com.spring.security.jwt.model.EmpleadoModel;
 
 import java.util.List;
@@ -11,4 +12,5 @@ public interface IEmpleadoRepository {
     EmpleadoModel save(EmpleadoModel empleado);
     EmpleadoModel update(Long id, EmpleadoModel empleado);
     void deleteById(Long id);
+    PageResponse<EmpleadoModel> findAllPaginado(int page, int size);
 }

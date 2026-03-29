@@ -3,6 +3,7 @@ package com.spring.security.jwt.repository.impl;
 import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
+import com.spring.security.jwt.dto.PageResponse;
 import com.spring.security.jwt.model.HerramientaModel;
 
 import java.util.List;
@@ -14,4 +15,5 @@ public interface IProductResository {
     boolean toggleEstatus(Long id);
     DashboardDto getDashboard();
     List<BitacoraDto> getBitacora();
+    PageResponse<BitacoraDto> getBitacoraPaginado(int page, int size);
 }

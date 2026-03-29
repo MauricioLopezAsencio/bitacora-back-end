@@ -3,6 +3,7 @@ package com.spring.security.jwt.service;
 import com.spring.security.jwt.dto.BitacoraDto;
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.HerramientaDto;
+import com.spring.security.jwt.dto.PageResponse;
 import com.spring.security.jwt.model.HerramientaModel;
 import com.spring.security.jwt.repository.impl.IProductResository;
 
@@ -57,5 +58,10 @@ public class ProductService implements  IProductService{
     @Override
     public List<BitacoraDto> getBitacora() {
         return iProductResository.getBitacora();
+    }
+
+    @Override
+    public PageResponse<BitacoraDto> getBitacoraPaginado(int page, int size) {
+        return iProductResository.getBitacoraPaginado(page, size);
     }
 }

@@ -4,6 +4,7 @@ import com.spring.security.jwt.dto.ApiResponse;
 import com.spring.security.jwt.dto.EmpleadoCreateRequest;
 import com.spring.security.jwt.dto.EmpleadoResponseDto;
 import com.spring.security.jwt.dto.EmpleadoUpdateRequest;
+import com.spring.security.jwt.dto.PageResponse;
 import com.spring.security.jwt.service.IEmpeladoService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -29,6 +30,16 @@ public class EmpleadoController {
     public ResponseEntity<ApiResponse<List<EmpleadoResponseDto>>> findAll(HttpServletRequest request) {
         List<EmpleadoResponseDto> data = empleadoService.findAll();
         return ResponseEntity.ok(ApiResponse.ok(data, "Empleados obtenidos exitosamente")
+                .toBuilder().path(request.getRequestURI()).build());
+    }
+
+    @GetMapping("/paginado")
+    public ResponseEntity<ApiResponse<PageResponse<EmpleadoResponseDto>>> findAllPaginado(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            HttpServletRequest request) {
+        PageResponse<EmpleadoResponseDto> data = empleadoService.findAllPaginado(page, size);
+        return ResponseEntity.ok(ApiResponse.ok(data, "Empleados paginados")
                 .toBuilder().path(request.getRequestURI()).build());
     }
 
