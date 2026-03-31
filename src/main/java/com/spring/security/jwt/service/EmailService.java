@@ -2,6 +2,8 @@ package com.spring.security.jwt.service;
 
 import com.spring.security.jwt.dto.DashboardDto;
 import com.spring.security.jwt.dto.PrestamoActivoDto;
+import com.spring.security.jwt.model.CorreoNotificacionModel;
+import com.spring.security.jwt.repository.CorreoNotificacionRepository;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -27,15 +29,10 @@ import java.util.List;
 public class EmailService {
 
     private final JavaMailSender mailSender;
-
-    @Value("${app.mail.destinatario}")
-    private String destinatario;
+    private final CorreoNotificacionRepository correoRepository;
 
     @Value("${spring.mail.username}")
     private String remitente;
-
-    @Value("${app.mail.destinatario-nombre:ING. Felix Hernandez}")
-    private String destinatarioNombre;
 
     // ── Paleta original de la aplicación ──────────────────────────────────────
     private static final String C_BODY    = "#07091e"; // fondo profundo
@@ -74,46 +71,53 @@ public class EmailService {
     public void enviarRecordatorioPrestamo(String nombreEmpleado, String nombreHerramienta,
                                            String turno, LocalDate fecha,
                                            int totalUnidades, int disponibles, int prestadas) {
-        enviar("Prestamo registrado: " + nombreHerramienta,
-                buildHtmlPrestamo(nombreEmpleado, nombreHerramienta, turno, fecha,
-                        totalUnidades, disponibles, prestadas),
-                nombreEmpleado, nombreHerramienta, turno);
+        List<CorreoNotificacionModel> destinatarios = correoRepository.findByBoActivoTrueAndBoBitacoraTrue();
+        String asunto = "Prestamo registrado: " + nombreHerramienta;
+        for (CorreoNotificacionModel dest : destinatarios) {
+            String html = buildHtmlPrestamo(dest.getDsNombre(), nombreEmpleado, nombreHerramienta,
+                    turno, fecha, totalUnidades, disponibles, prestadas);
+            enviar(asunto, html, dest.getDsCorreo(), nombreEmpleado, nombreHerramienta, turno);
+        }
     }
 
     public void enviarRecordatorioFinTurno(String nombreEmpleado, String nombreHerramienta,
                                            String turno, LocalDate fecha,
                                            DashboardDto dashboard) {
-        enviar("Accion requerida \u2013 " + nombreHerramienta + " pendiente de devolucion",
-                buildHtmlFinTurno(nombreEmpleado, nombreHerramienta, turno, fecha, dashboard),
-                nombreEmpleado, nombreHerramienta, turno);
+        List<CorreoNotificacionModel> destinatarios = correoRepository.findByBoActivoTrueAndBoRecordatoriosTrue();
+        String asunto = "Accion requerida \u2013 " + nombreHerramienta + " pendiente de devolucion";
+        for (CorreoNotificacionModel dest : destinatarios) {
+            String html = buildHtmlFinTurno(dest.getDsNombre(), nombreEmpleado, nombreHerramienta,
+                    turno, fecha, dashboard);
+            enviar(asunto, html, dest.getDsCorreo(), nombreEmpleado, nombreHerramienta, turno);
+        }
     }
 
     // ── Send ───────────────────────────────────────────────────────────────────
 
-    private void enviar(String asunto, String html, String emp, String herr, String turno) {
+    private void enviar(String asunto, String html, String correo, String emp, String herr, String turno) {
         try {
             MimeMessage msg = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
             helper.setFrom(remitente);
-            helper.setTo(destinatario);
+            helper.setTo(correo);
             helper.setSubject(asunto);
             helper.setText(html, true);
             mailSender.send(msg);
-            log.info("Correo enviado empleado={} herramienta={} turno={}", emp, herr, turno);
+            log.info("Correo enviado a={} empleado={} herramienta={} turno={}", correo, emp, herr, turno);
         } catch (MessagingException | MailException e) {
-            log.error("Error al enviar correo empleado={} herramienta={}: {}", emp, herr, e.getMessage());
+            log.error("Error al enviar correo a={} empleado={} herramienta={}: {}", correo, emp, herr, e.getMessage());
         }
     }
 
     // ── HTML Composers ─────────────────────────────────────────────────────────
 
-    private String buildHtmlPrestamo(String emp, String herr, String turno, LocalDate fecha,
-                                      int total, int disponibles, int prestadas) {
+    private String buildHtmlPrestamo(String destNombre, String emp, String herr, String turno,
+                                      LocalDate fecha, int total, int disponibles, int prestadas) {
         StringBuilder sb = new StringBuilder();
         abrirFrame(sb);
         header(sb,
             "&#128230; Prestamo Registrado",
-            "Hola, " + destinatarioNombre + ". Se ha registrado un nuevo prestamo en el sistema.",
+            "Hola, " + destNombre + ". Se ha registrado un nuevo prestamo en el sistema.",
             false);
         kpis(sb, total, disponibles, prestadas);
         infoCard(sb, emp, herr, turno, fecha);
@@ -122,8 +126,8 @@ public class EmailService {
         return sb.toString();
     }
 
-    private String buildHtmlFinTurno(String emp, String herr, String turno, LocalDate fecha,
-                                      DashboardDto dashboard) {
+    private String buildHtmlFinTurno(String destNombre, String emp, String herr, String turno,
+                                      LocalDate fecha, DashboardDto dashboard) {
         int total     = dashboard == null ? 0 : dashboard.getTotalUnidades();
         int disp      = dashboard == null ? 0 : dashboard.getTotalDisponibles();
         int prestadas = dashboard == null ? 0 : dashboard.getTotalPrestadas();
@@ -133,7 +137,7 @@ public class EmailService {
         abrirFrame(sb);
         header(sb,
             "&#9203; Accion Requerida",
-            destinatarioNombre + ", hay una herramienta pendiente de devolucion en los proximos 30 minutos.",
+            destNombre + ", hay una herramienta pendiente de devolucion en los proximos 30 minutos.",
             true);
         alertaBanner(sb, emp, herr, turno);
         kpis(sb, total, disp, prestadas);

@@ -90,11 +90,91 @@ Semáforo `alerta`: `VERDE` 0–2 días · `AMARILLO` 3–4 días · `ROJO` 5+ d
 
 ---
 
+## Correos de Notificación — `CorreoNotificacionController` (`/api/v1/correos`)
+
+| Método | Ruta                              | Descripción                                               |
+|--------|-----------------------------------|-----------------------------------------------------------|
+| GET    | `/api/v1/correos`                 | Lista todos los destinatarios de correo                   |
+| GET    | `/api/v1/correos/{id}`            | Obtiene un destinatario por su ID                         |
+| POST   | `/api/v1/correos`                 | Crea un nuevo destinatario                                |
+| PUT    | `/api/v1/correos/{id}`            | Actualiza nombre, correo y preferencias de notificación   |
+| DELETE | `/api/v1/correos/{id}`            | Elimina un destinatario por su ID                         |
+| PUT    | `/api/v1/correos/{id}/toggle-activo` | Activa o desactiva un destinatario (toggle)            |
+
+**Body POST/PUT:**
+```json
+{
+  "dsNombre": "ING. Felix Hernandez",
+  "dsCorreo": "felix@empresa.com",
+  "boRecordatorios": true,
+  "boBitacora": true
+}
+```
+
+**Response GET /correos:**
+```json
+{
+  "status": 200,
+  "data": [
+    {
+      "id": 1,
+      "dsNombre": "ING. Felix Hernandez",
+      "dsCorreo": "felix@empresa.com",
+      "boActivo": true,
+      "boRecordatorios": true,
+      "boBitacora": true
+    }
+  ]
+}
+```
+
+> **Tipos de notificación:**
+> - `boRecordatorios`: recibe correos 30 min antes de que termine el turno si la herramienta no fue devuelta
+> - `boBitacora`: recibe correo de confirmación al momento de registrar un préstamo
+
+---
+
+## Configuración — `ConfiguracionController`
+
+| Método | Ruta                                        | Alias aceptado                          | Descripción                                       |
+|--------|---------------------------------------------|-----------------------------------------|---------------------------------------------------|
+| GET    | `/api/v1/configuracion/turnos`              | `/api/v1/turnos`                        | Lista los 3 turnos con sus horarios configurados  |
+| PUT    | `/api/v1/configuracion/turnos/{id}`         | `/api/v1/turnos/{id}`                   | Actualiza hora de inicio y fin de un turno        |
+| GET    | `/api/v1/configuracion/parametros`          | `/api/v1/configuracion/recordatorio`    | Obtiene los parámetros del sistema                |
+| PUT    | `/api/v1/configuracion/parametros`          | `/api/v1/configuracion/recordatorio`    | Actualiza el tiempo de anticipación del recordatorio |
+
+**Body PUT /configuracion/turnos/{id}:**
+```json
+{ "horaInicio": 6, "horaFin": 14 }
+```
+
+**Body PUT /configuracion/parametros:**
+```json
+{ "minutosRecordatorio": 45 }
+```
+
+**Response GET /configuracion/turnos:**
+```json
+{
+  "status": 200,
+  "data": [
+    { "id": 1, "cvTurno": "MATUTINO",   "horaInicio": 6,  "horaFin": 14, "dsHorario": "06:00 → 14:00" },
+    { "id": 2, "cvTurno": "VESPERTINO", "horaInicio": 14, "horaFin": 22, "dsHorario": "14:00 → 22:00" },
+    { "id": 3, "cvTurno": "NOCTURNO",   "horaInicio": 22, "horaFin": 6,  "dsHorario": "22:00 → 06:00" }
+  ]
+}
+```
+
+> **Regla de negocio:** NOCTURNO requiere `horaFin < horaInicio` (cruza medianoche).
+> MATUTINO y VESPERTINO requieren `horaFin > horaInicio`.
+
+---
+
 ## Resumen global
 
 | Método | Total |
 |--------|-------|
-| GET    | 8     |
-| POST   | 3     |
-| PUT    | 3     |
-| DELETE | 1     |
+| GET    | 12    |
+| POST   | 4     |
+| PUT    | 7     |
+| DELETE | 2     |

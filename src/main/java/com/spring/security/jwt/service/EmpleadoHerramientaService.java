@@ -6,8 +6,11 @@ import com.spring.security.jwt.dto.EmpleadoHerramientaDTO;
 import com.spring.security.jwt.model.EmpleadoHerramientaModel;
 import com.spring.security.jwt.model.EmpleadoModel;
 import com.spring.security.jwt.model.HerramientaModel;
+import com.spring.security.jwt.model.TurnoConfigModel;
 import com.spring.security.jwt.repository.EmpleadoRepository;
 import com.spring.security.jwt.repository.HerramientaRepository;
+import com.spring.security.jwt.repository.ParametroSistemaRepository;
+import com.spring.security.jwt.repository.TurnoConfigRepository;
 import com.spring.security.jwt.repository.impl.EmpleadoHerramientaRepository;
 import com.spring.security.jwt.exception.NegocioException;
 import jakarta.annotation.PostConstruct;
@@ -49,6 +52,12 @@ public class EmpleadoHerramientaService {
 
     @Autowired
     private TaskScheduler taskScheduler;
+
+    @Autowired
+    private TurnoConfigRepository turnoConfigRepository;
+
+    @Autowired
+    private ParametroSistemaRepository parametroSistemaRepository;
 
     @Value("${app.turno.duracion-horas:12}")
     private long duracionTurnoHoras;
@@ -98,11 +107,15 @@ public class EmpleadoHerramientaService {
         emailService.enviarRecordatorioPrestamo(empNombre, herrNombre, turnoFinal, fechaFinal,
                 totalH, dispH, prestadasH);
 
-        // Email 2: recordatorio 30 min antes de que termine el turno
+        // Email 2: recordatorio N minutos antes de que termine el turno (configurable en BD)
         // Solo se envía si la herramienta sigue sin devolverse; usa dashboard global en ese momento
+        int minutosAntes = parametroSistemaRepository.findById(1L)
+                .map(p -> p.getMinutosRecordatorio())
+                .orElse(30);
         Instant finTurno = calcularFinTurno(turno, guardado.getFecha(), guardado.getFcAsignacion())
-                .minusSeconds(30 * 60);
-        log.info("Recordatorio programado asignacionId={} finTurno={}", asignacionId, finTurno);
+                .minusSeconds((long) minutosAntes * 60);
+        log.info("Recordatorio programado asignacionId={} finTurno={} minutosAntes={}",
+                asignacionId, finTurno, minutosAntes);
         taskScheduler.schedule(() ->
             empleadoHerramientaRepository.findById(asignacionId).ifPresent(asignacion -> {
                 if (!asignacion.isEstatus()) {
@@ -122,11 +135,14 @@ public class EmpleadoHerramientaService {
 
     @PostConstruct
     public void recuperarRecordatoriosPendientes() {
+        int minutosAntes = parametroSistemaRepository.findById(1L)
+                .map(p -> p.getMinutosRecordatorio())
+                .orElse(30);
         List<EmpleadoHerramientaModel> activas = empleadoHerramientaRepository
                 .findActivasPendientesRecordatorio();
         for (EmpleadoHerramientaModel a : activas) {
             Instant finTurno = calcularFinTurno(a.getTurno(), a.getFecha(), a.getFcAsignacion())
-                    .minusSeconds(30 * 60);
+                    .minusSeconds((long) minutosAntes * 60);
             if (finTurno.isAfter(Instant.now())) {
                 final Long asignacionId  = a.getId();
                 final String empNombre   = a.getEmpleado().getNombre();
@@ -207,37 +223,49 @@ public class EmpleadoHerramientaService {
     }
 
     /**
-     * Devuelve el {@link Instant} exacto en que finaliza el turno:
-     * <ul>
-     *   <li>MATUTINO  → 14:00 del día de asignación</li>
-     *   <li>VESPERTINO → 22:00 del día de asignación</li>
-     *   <li>NOCTURNO  → 06:00 del día siguiente</li>
-     * </ul>
-     * Si por alguna razón el fin calculado ya pasó, se usa {@code asignacion + duracionTurnoHoras}
-     * como respaldo para no programar tareas en el pasado.
+     * Devuelve el {@link Instant} exacto en que finaliza el turno.
+     * Los horarios se leen desde {@code ct_turno_config}; si no existe la fila,
+     * se usan los valores por defecto (MATUTINO 14h / VESPERTINO 22h / NOCTURNO 06h).
+     * <p>
+     * Para NOCTURNO (fin &lt; inicio, cruza medianoche): si la asignación ocurrió
+     * antes de {@code hora_fin}, el turno ya comenzó "ayer" y termina HOY;
+     * si ocurrió después, termina MAÑANA.
+     * </p>
+     * Si el fin calculado ya pasó, se usa {@code asignacion + duracionTurnoHoras} como respaldo.
      */
     private Instant calcularFinTurno(String turno, LocalDate fecha, LocalDateTime asignacion) {
-        LocalDateTime fin = switch (turno.toUpperCase()) {
-            case "VESPERTINO" -> fecha.atTime(LocalTime.of(22, 0));
-            case "NOCTURNO"   -> {
-                // Si la asignación fue entre medianoche y 05:59, el turno nocturno
-                // ya inició ayer y termina HOY a las 06:00, no mañana.
-                LocalTime horaAsignacion = asignacion.toLocalTime();
-                if (horaAsignacion.isBefore(LocalTime.of(6, 0))) {
-                    yield fecha.atTime(LocalTime.of(6, 0));
-                } else {
-                    yield fecha.plusDays(1).atTime(LocalTime.of(6, 0));
-                }
+        TurnoConfigModel config = turnoConfigRepository.findByCvTurno(turno.toUpperCase())
+                .orElse(null);
+        int horaFin = resolverHoraFin(turno, config);
+
+        LocalDateTime fin;
+        if ("NOCTURNO".equalsIgnoreCase(turno)) {
+            LocalTime horaAsignacion = asignacion.toLocalTime();
+            if (horaAsignacion.isBefore(LocalTime.of(horaFin, 0))) {
+                fin = fecha.atTime(LocalTime.of(horaFin, 0));
+            } else {
+                fin = fecha.plusDays(1).atTime(LocalTime.of(horaFin, 0));
             }
-            default           -> fecha.atTime(LocalTime.of(14, 0)); // MATUTINO
-        };
+        } else {
+            fin = fecha.atTime(LocalTime.of(horaFin, 0));
+        }
+
         Instant resultado = fin.atZone(ZoneId.systemDefault()).toInstant();
-        // Respaldo: si ya pasó, usar la duración fija configurada
         if (resultado.isBefore(Instant.now())) {
             return asignacion.plusHours(duracionTurnoHoras)
                     .atZone(ZoneId.systemDefault()).toInstant();
         }
         return resultado;
+    }
+
+    /** Hora de fin desde config BD; si no existe, devuelve el valor por defecto del turno. */
+    private int resolverHoraFin(String turno, TurnoConfigModel config) {
+        if (config != null) return config.getHoraFin();
+        return switch (turno.toUpperCase()) {
+            case "VESPERTINO" -> 22;
+            case "NOCTURNO"   -> 6;
+            default           -> 14; // MATUTINO
+        };
     }
 
     @Transactional
