@@ -41,6 +41,7 @@ public class CorsConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/calendario/**").permitAll()
                         .requestMatchers("/api/v1/bitacora/**").permitAll()
+                        .requestMatchers("/api/v1/actividades/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

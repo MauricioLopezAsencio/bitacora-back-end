@@ -50,6 +50,15 @@ public class GlobalExceptionHandler {
                         .path(request.getRequestURI()).build());
     }
 
+    @ExceptionHandler(TokenExpiradoException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTokenExpirado(
+            TokenExpiradoException ex, HttpServletRequest request) {
+        log.warn("Token expirado path={} mensaje={}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(401)
+                .body(ApiResponse.error(401, ex.getMessage(), "TOKEN_EXPIRADO").toBuilder()
+                        .path(request.getRequestURI()).build());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(
             Exception ex, HttpServletRequest request) {

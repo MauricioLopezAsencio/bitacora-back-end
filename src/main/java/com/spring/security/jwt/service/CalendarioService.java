@@ -55,10 +55,13 @@ public class CalendarioService implements ICalendarioService {
     }
 
     @Override
-    public List<CalendarioEventoDto> obtenerEventos(String bearerToken) {
+    public List<CalendarioEventoDto> obtenerEventos(String bearerToken, LocalDate fechaInicio, LocalDate fechaFin) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(bearerToken);
         HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        LocalDate desde = fechaInicio != null ? fechaInicio : LocalDate.of(2000, 1, 1);
+        LocalDate hasta = fechaFin   != null ? fechaFin   : LocalDate.now(ZONA_MEXICO);
 
         try {
             ResponseEntity<GraphEventsResponse> response = restTemplate.exchange(
@@ -72,8 +75,8 @@ public class CalendarioService implements ICalendarioService {
 
             return eventos.stream()
                     .flatMap(event -> "seriesMaster".equalsIgnoreCase(event.getType())
-                            ? expandirSerieMaestra(event).stream()
-                            : Stream.of(toDto(event)))
+                            ? expandirSerieMaestra(event, desde, hasta).stream()
+                            : estaEnRango(event, desde, hasta) ? Stream.of(toDto(event)) : Stream.empty())
                     .toList();
 
         } catch (HttpClientErrorException ex) {
@@ -105,7 +108,7 @@ public class CalendarioService implements ICalendarioService {
 
     // ─── Expansión de seriesMaster ───────────────────────────────────────────
 
-    private List<CalendarioEventoDto> expandirSerieMaestra(GraphEvent event) {
+    private List<CalendarioEventoDto> expandirSerieMaestra(GraphEvent event, LocalDate desde, LocalDate hasta) {
         GraphRecurrence recurrence = event.getRecurrence();
         if (recurrence == null || recurrence.getPattern() == null || recurrence.getRange() == null) {
             log.warn("seriesMaster sin recurrencia completa subject={}", event.getSubject());
@@ -116,7 +119,6 @@ public class CalendarioService implements ICalendarioService {
         GraphRecurrenceRange range     = recurrence.getRange();
 
         LocalDate startDate = LocalDate.parse(range.getStartDate());
-        LocalDate endDate   = resolverFechaFin(range, startDate);
         Integer maxOcurrencias = "numbered".equalsIgnoreCase(range.getType())
                 ? range.getNumberOfOccurrences() : null;
 
@@ -127,15 +129,34 @@ public class CalendarioService implements ICalendarioService {
 
         ZoneId sourceZone = resolverZona(event.getStart().getTimeZone());
 
-        LocalDate hoy = LocalDate.now(ZONA_MEXICO);
+        // Techo de la serie: usa la fecha de fin de la serie si existe, si no, usa hasta
+        LocalDate serieFin = "endDate".equalsIgnoreCase(range.getType()) && range.getEndDate() != null
+                ? LocalDate.parse(range.getEndDate())
+                : hasta;
 
-        List<LocalDate> fechas = generarOcurrencias(pattern, startDate, endDate, maxOcurrencias)
-                .stream()
-                .filter(fecha -> !fecha.isAfter(hoy))
+        // Intersección entre el rango de la serie y el rango solicitado
+        LocalDate rangoDesde = startDate.isBefore(desde) ? desde : startDate;
+        LocalDate rangoHasta = serieFin.isAfter(hasta)   ? hasta : serieFin;
+
+        log.info("seriesMaster DEBUG subject={} | range.type={} range.startDate={} range.endDate={} | pattern.type={} pattern.interval={} pattern.daysOfWeek={} | rangoDesde={} rangoHasta={}",
+                event.getSubject(), range.getType(), range.getStartDate(), range.getEndDate(),
+                pattern.getType(), pattern.getInterval(), pattern.getDaysOfWeek(),
+                rangoDesde, rangoHasta);
+
+        if (rangoDesde.isAfter(rangoHasta)) {
+            log.warn("seriesMaster sin ocurrencias en el rango: rangoDesde={} > rangoHasta={} subject={}",
+                    rangoDesde, rangoHasta, event.getSubject());
+            return Collections.emptyList();
+        }
+
+        List<LocalDate> generadas = generarOcurrencias(pattern, rangoDesde, rangoHasta, maxOcurrencias);
+        log.info("seriesMaster generadas antes de filtro feriados={} subject={}", generadas.size(), event.getSubject());
+
+        List<LocalDate> fechas = generadas.stream()
                 .filter(fecha -> !feriadosService.esFeriado(fecha))
                 .toList();
 
-        log.info("seriesMaster expandido subject={} ocurrencias hoy={}", event.getSubject(), fechas.size());
+        log.info("seriesMaster expandido subject={} ocurrencias={}", event.getSubject(), fechas.size());
 
         final long durFinal = duracionMinutos;
         final String rangeStart  = range.getStartDate();
@@ -238,6 +259,15 @@ public class CalendarioService implements ICalendarioService {
             return startDate.plusYears(5);
         }
         return startDate.plusYears(1); // noEnd: ventana de 1 año
+    }
+
+    private boolean estaEnRango(GraphEvent event, LocalDate desde, LocalDate hasta) {
+        try {
+            LocalDate fecha = LocalDate.parse(event.getStart().getDateTime().substring(0, 10));
+            return !fecha.isBefore(desde) && !fecha.isAfter(hasta);
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     private LocalTime extraerHora(String dateTime) {
