@@ -30,7 +30,10 @@ public class BitacoraController {
 
         try {
             Object data = bitacoraService.obtenerProyectosPorEmpleado(
-                    request.getIdEmpleado(), request.getToken());
+                    request.getIdEmpleado(),
+                    request.getUsername(),
+                    request.getPassword()
+            );
 
             return ResponseEntity.ok(ApiResponse.ok(data, "Proyectos obtenidos exitosamente")
                     .toBuilder().path(servletRequest.getRequestURI()).build());

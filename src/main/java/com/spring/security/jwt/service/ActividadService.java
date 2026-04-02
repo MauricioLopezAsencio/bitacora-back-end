@@ -43,7 +43,7 @@ private final ICalendarioService calendarioService;
     public ActividadResultDto obtenerActividades(ActividadRequest request) {
         List<CalendarioEventoDto> eventos = obtenerEventos(request);
         List<Map<String, Object>> proyectos = obtenerProyectos(request.getIdEmpleado(),
-                request.getTokenBitacora());
+                request.getUsername(), request.getPassword());
 
         Map<Boolean, List<ActividadDto>> particion = eventos.stream()
                 .map(evento -> mapearActividad(evento, request.getIdEmpleado(), proyectos))
@@ -150,9 +150,9 @@ private final ICalendarioService calendarioService;
         }
     }
 
-    private List<Map<String, Object>> obtenerProyectos(Long idEmpleado, String tokenBitacora) {
+    private List<Map<String, Object>> obtenerProyectos(Long idEmpleado, String username, String password) {
         try {
-            Object raw = bitacoraService.obtenerProyectosPorEmpleado(idEmpleado, tokenBitacora);
+            Object raw = bitacoraService.obtenerProyectosPorEmpleado(idEmpleado, username, password);
             if (raw == null) return Collections.emptyList();
 
             // El API devuelve { "status": "OK", "data": [...] }
@@ -165,7 +165,7 @@ private final ICalendarioService calendarioService;
                     new TypeReference<List<Map<String, Object>>>() {});
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode().value() == 401) {
-                throw new TokenExpiradoException("tokenBitacora");
+                throw new TokenExpiradoException("bitacora");
             }
             log.error("Error al obtener proyectos de bitácora idEmpleado={}: {}", idEmpleado, ex.getMessage());
             return Collections.emptyList();

@@ -12,6 +12,9 @@ public class BitacoraProyectosRequest {
     @NotNull(message = "idEmpleado es requerido")
     private Long idEmpleado;
 
-    @NotBlank(message = "token es requerido")
-    private String token;
+    @NotBlank(message = "username es requerido")
+    private String username;
+
+    @NotBlank(message = "password es requerido")
+    private String password;
 }

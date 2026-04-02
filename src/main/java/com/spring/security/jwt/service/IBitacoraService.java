@@ -2,5 +2,5 @@ package com.spring.security.jwt.service;
 
 public interface IBitacoraService {
 
-    Object obtenerProyectosPorEmpleado(Long idEmpleado, String token);
+    Object obtenerProyectosPorEmpleado(Long idEmpleado, String username, String password);
 }

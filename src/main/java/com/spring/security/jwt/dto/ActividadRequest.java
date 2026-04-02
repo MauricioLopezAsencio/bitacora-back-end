@@ -17,8 +17,11 @@ public class ActividadRequest {
     @NotBlank(message = "tokenMicrosoft es requerido")
     private String tokenMicrosoft;
 
-    @NotBlank(message = "tokenBitacora es requerido")
-    private String tokenBitacora;
+    @NotBlank(message = "username es requerido")
+    private String username;
+
+    @NotBlank(message = "password es requerido")
+    private String password;
 
     @NotNull(message = "fechaInicio es requerida")
     private LocalDate fechaInicio;
