@@ -11,9 +11,6 @@ import java.time.LocalDate;
 @Setter
 public class ActividadRequest {
 
-    @NotNull(message = "idEmpleado es requerido")
-    private Long idEmpleado;
-
     @NotBlank(message = "tokenMicrosoft es requerido")
     private String tokenMicrosoft;
 

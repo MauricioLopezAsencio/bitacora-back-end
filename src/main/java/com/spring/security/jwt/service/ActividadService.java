@@ -41,12 +41,13 @@ private final ICalendarioService calendarioService;
 
     @Override
     public ActividadResultDto obtenerActividades(ActividadRequest request) {
+        Long idEmpleado = bitacoraService.obtenerIdEmpleado(request.getUsername(), request.getPassword());
         List<CalendarioEventoDto> eventos = obtenerEventos(request);
-        List<Map<String, Object>> proyectos = obtenerProyectos(request.getIdEmpleado(),
+        List<Map<String, Object>> proyectos = obtenerProyectos(idEmpleado,
                 request.getUsername(), request.getPassword());
 
         Map<Boolean, List<ActividadDto>> particion = eventos.stream()
-                .map(evento -> mapearActividad(evento, request.getIdEmpleado(), proyectos))
+                .map(evento -> mapearActividad(evento, idEmpleado, proyectos))
                 .collect(Collectors.partitioningBy(a -> !NA.equals(a.getIdProyecto())));
 
         return ActividadResultDto.builder()

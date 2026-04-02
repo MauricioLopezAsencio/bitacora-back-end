@@ -33,28 +33,36 @@ public class BitacoraTokenManager {
 
     /** Devuelve token vigente; hace login si expiró o no existe. */
     public String obtenerToken(String username, String password) {
-        TokenEntry entry = cache.get(username);
-        if (entry == null || entry.estaExpirado()) {
-            log.info("Token no vigente para username={}, solicitando nuevo...", username);
-            String token = login(username, password);
-            cache.put(username, new TokenEntry(token));
-            return token;
-        }
-        return entry.token;
+        return obtenerEntry(username, password).token;
+    }
+
+    /** Devuelve el idEmpleado extraído de la respuesta del login del SCO. */
+    public Long obtenerIdEmpleado(String username, String password) {
+        return obtenerEntry(username, password).idEmpleado;
     }
 
     /** Fuerza renovación (llamar cuando la API responda 401). */
     public String renovarToken(String username, String password) {
         log.info("Renovando token por 401 username={}", username);
-        String token = login(username, password);
-        cache.put(username, new TokenEntry(token));
-        return token;
+        TokenEntry entry = login(username, password);
+        cache.put(username, entry);
+        return entry.token;
+    }
+
+    private TokenEntry obtenerEntry(String username, String password) {
+        TokenEntry entry = cache.get(username);
+        if (entry == null || entry.estaExpirado()) {
+            log.info("Token no vigente para username={}, solicitando nuevo...", username);
+            entry = login(username, password);
+            cache.put(username, entry);
+        }
+        return entry;
     }
 
     // ── Privados ─────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
-    private String login(String username, String password) {
+    private TokenEntry login(String username, String password) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -75,12 +83,15 @@ public class BitacoraTokenManager {
             Object data = responseBody.get("data");
             if (data instanceof Map<?, ?> dataMap && dataMap.get("token") != null) {
                 log.info("Token obtenido correctamente username={}", username);
-                return dataMap.get("token").toString();
+                String token      = dataMap.get("token").toString();
+                Long   idEmpleado = extraerIdEmpleado(dataMap);
+                return new TokenEntry(token, idEmpleado);
             }
             Object token = responseBody.get("token");
             if (token != null) {
                 log.info("Token obtenido correctamente username={}", username);
-                return token.toString();
+                Long idEmpleado = extraerIdEmpleado(responseBody);
+                return new TokenEntry(token.toString(), idEmpleado);
             }
             throw new RuntimeException("No se encontró el token en la respuesta de bitácora");
 
@@ -88,6 +99,12 @@ public class BitacoraTokenManager {
             log.error("Error al autenticar en bitácora username={}: {}", username, ex.getMessage());
             throw new RuntimeException("Error al autenticar en bitácora: " + ex.getMessage(), ex);
         }
+    }
+
+    private Long extraerIdEmpleado(Map<?, ?> map) {
+        Object raw = map.get("id");
+        if (raw == null) return null;
+        return ((Number) raw).longValue();
     }
 
     private String md5(String input) {
@@ -106,10 +123,12 @@ public class BitacoraTokenManager {
 
     private static class TokenEntry {
         final String token;
+        final Long   idEmpleado;
         final Instant expiracion;
 
-        TokenEntry(String token) {
-            this.token = token;
+        TokenEntry(String token, Long idEmpleado) {
+            this.token      = token;
+            this.idEmpleado = idEmpleado;
             this.expiracion = Instant.now().plusSeconds(TTL_SEGUNDOS);
         }
 
