@@ -1,0 +1,31 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/bt-backend
+            git pull
+            docker stop bt-backend-container || true
+            docker rm bt-backend-container || true
+            docker build --no-cache -t bt-backend .
+            docker run -d \
+              --name bt-backend-container \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              -e SUPABASE_PASSWORD="${{ secrets.SUPABASE_PASSWORD }}" \
+              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              bt-backend
