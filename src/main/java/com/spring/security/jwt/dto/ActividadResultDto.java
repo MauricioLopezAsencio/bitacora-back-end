@@ -11,4 +11,6 @@ public class ActividadResultDto {
 
     private List<ActividadDto> actividades;
     private List<ActividadDto> sesionesNoPareadasAProyecto;
+    private List<ProyectoDto>  proyectosDisponibles;
+    private Object             tiposActividad;
 }

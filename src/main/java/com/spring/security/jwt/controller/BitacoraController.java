@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
 
+import jakarta.validation.constraints.Positive;
+
 @RestController
 @RequestMapping("/api/v1/bitacora")
 @CrossOrigin("*")
@@ -70,6 +72,54 @@ public class BitacoraController {
                     .body(ApiResponse.<Object>builder()
                             .status(ex.getStatusCode().value())
                             .message("Error al consultar bitácora: " + reason)
+                            .errorCode("BITACORA_API_ERROR")
+                            .path(servletRequest.getRequestURI())
+                            .build());
+        }
+    }
+
+    @PostMapping("/tipoActividad")
+    public ResponseEntity<ApiResponse<Object>> obtenerTiposActividad(
+            @Valid @RequestBody BitacoraProyectosRequest request,
+            HttpServletRequest servletRequest) {
+
+        try {
+            Object data = bitacoraService.obtenerTiposActividad(request.getUsername(), request.getPassword());
+            return ResponseEntity.ok(ApiResponse.ok(data, "Tipos de actividad obtenidos exitosamente")
+                    .toBuilder().path(servletRequest.getRequestURI()).build());
+
+        } catch (HttpClientErrorException ex) {
+            HttpStatus httpStatus = HttpStatus.resolve(ex.getStatusCode().value());
+            String reason = httpStatus != null ? httpStatus.getReasonPhrase() : "Error desconocido";
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(ApiResponse.<Object>builder()
+                            .status(ex.getStatusCode().value())
+                            .message("Error al consultar tipos de actividad: " + reason)
+                            .errorCode("BITACORA_API_ERROR")
+                            .path(servletRequest.getRequestURI())
+                            .build());
+        }
+    }
+
+    @GetMapping("/actividades/{idTipoActividad}")
+    public ResponseEntity<ApiResponse<Object>> obtenerActividadesPorTipo(
+            @PathVariable @Positive Integer idTipoActividad,
+            @RequestParam String username,
+            @RequestParam String password,
+            HttpServletRequest servletRequest) {
+
+        try {
+            Object data = bitacoraService.obtenerActividadesPorTipo(idTipoActividad, username, password);
+            return ResponseEntity.ok(ApiResponse.ok(data, "Actividades obtenidas exitosamente")
+                    .toBuilder().path(servletRequest.getRequestURI()).build());
+
+        } catch (HttpClientErrorException ex) {
+            HttpStatus httpStatus = HttpStatus.resolve(ex.getStatusCode().value());
+            String reason = httpStatus != null ? httpStatus.getReasonPhrase() : "Error desconocido";
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(ApiResponse.<Object>builder()
+                            .status(ex.getStatusCode().value())
+                            .message("Error al consultar actividades: " + reason)
                             .errorCode("BITACORA_API_ERROR")
                             .path(servletRequest.getRequestURI())
                             .build());

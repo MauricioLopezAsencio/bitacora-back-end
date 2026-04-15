@@ -6,6 +6,7 @@ import com.spring.security.jwt.dto.ActividadDto;
 import com.spring.security.jwt.dto.ActividadRequest;
 import com.spring.security.jwt.dto.ActividadResultDto;
 import com.spring.security.jwt.dto.CalendarioEventoDto;
+import com.spring.security.jwt.dto.ProyectoDto;
 import com.spring.security.jwt.exception.TokenExpiradoException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ private final ICalendarioService calendarioService;
         List<CalendarioEventoDto> eventos = obtenerEventos(request);
         List<Map<String, Object>> proyectos = obtenerProyectos(idEmpleado,
                 request.getUsername(), request.getPassword());
+        Object tiposActividad = obtenerTiposActividad(request.getUsername(), request.getPassword());
 
         Map<Boolean, List<ActividadDto>> particion = eventos.stream()
                 .map(evento -> mapearActividad(evento, idEmpleado, proyectos))
@@ -53,7 +55,33 @@ private final ICalendarioService calendarioService;
         return ActividadResultDto.builder()
                 .actividades(particion.get(true))
                 .sesionesNoPareadasAProyecto(particion.get(false))
+                .proyectosDisponibles(mapearProyectos(proyectos))
+                .tiposActividad(tiposActividad)
                 .build();
+    }
+
+    // ─── Tipos de actividad ──────────────────────────────────────────────────
+
+    private Object obtenerTiposActividad(String username, String password) {
+        try {
+            return bitacoraService.obtenerTiposActividad(username, password);
+        } catch (Exception ex) {
+            log.error("Error al obtener tipos de actividad: {}", ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // ─── Mapeo de proyectos para combo ──────────────────────────────────────
+
+    private List<ProyectoDto> mapearProyectos(List<Map<String, Object>> proyectos) {
+        if (proyectos == null) return Collections.emptyList();
+        return proyectos.stream()
+                .filter(p -> p.get("id") != null && p.get("descripcion") != null)
+                .map(p -> ProyectoDto.builder()
+                        .id(((Number) p.get("id")).longValue())
+                        .descripcion(p.get("descripcion").toString())
+                        .build())
+                .toList();
     }
 
     // ─── Mapeo principal ─────────────────────────────────────────────────────

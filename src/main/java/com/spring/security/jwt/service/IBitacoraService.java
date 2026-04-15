@@ -9,4 +9,8 @@ public interface IBitacoraService {
     Long obtenerIdEmpleado(String username, String password);
 
     Object registrarActividad(RegistrarActividadRequest request);
+
+    Object obtenerTiposActividad(String username, String password);
+
+    Object obtenerActividadesPorTipo(Integer idTipoActividad, String username, String password);
 }

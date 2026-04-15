@@ -25,6 +25,12 @@ public class BitacoraService implements IBitacoraService {
     private static final String REGISTRAR_ACTIVIDAD_URL =
             "https://scoca.casystem.com.mx/api/bitacora";
 
+    private static final String TIPO_ACTIVIDAD_URL =
+            "https://scoca.casystem.com.mx/api/bitacora/tipoActividad";
+
+    private static final String ACTIVIDADES_POR_TIPO_URL =
+            "https://scoca.casystem.com.mx/api/bitacora/actividades/{idTipoActividad}";
+
     private final RestTemplate restTemplate;
     private final BitacoraTokenManager tokenManager;
 
@@ -69,6 +75,36 @@ public class BitacoraService implements IBitacoraService {
         }
     }
 
+    @Override
+    public Object obtenerTiposActividad(String username, String password) {
+        try {
+            return ejecutarGetSimple(TIPO_ACTIVIDAD_URL, tokenManager.obtenerToken(username, password));
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                log.warn("Token expirado al obtener tipos de actividad, renovando...");
+                return ejecutarGetSimple(TIPO_ACTIVIDAD_URL, tokenManager.renovarToken(username, password));
+            }
+            log.error("Error al consultar tipos de actividad status={}", ex.getStatusCode());
+            throw ex;
+        }
+    }
+
+    @Override
+    public Object obtenerActividadesPorTipo(Integer idTipoActividad, String username, String password) {
+        try {
+            return ejecutarGetConVariable(ACTIVIDADES_POR_TIPO_URL,
+                    tokenManager.obtenerToken(username, password), idTipoActividad);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                log.warn("Token expirado al obtener actividades idTipoActividad={}, renovando...", idTipoActividad);
+                return ejecutarGetConVariable(ACTIVIDADES_POR_TIPO_URL,
+                        tokenManager.renovarToken(username, password), idTipoActividad);
+            }
+            log.error("Error al consultar actividades idTipoActividad={} status={}", idTipoActividad, ex.getStatusCode());
+            throw ex;
+        }
+    }
+
     private Object ejecutarRegistro(RegistrarActividadRequest request, Long idEmpleado, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
@@ -96,6 +132,38 @@ public class BitacoraService implements IBitacoraService {
         ResponseEntity<Object> response = restTemplate.exchange(
                 BITACORA_URL, HttpMethod.GET, new HttpEntity<>(headers), Object.class, idEmpleado);
         log.info("Proyectos obtenidos idEmpleado={}", idEmpleado);
+        return response.getBody();
+    }
+
+    private Object ejecutarGetSimple(String url, String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        ResponseEntity<Object> response = restTemplate.exchange(
+                url, HttpMethod.GET, new HttpEntity<>(headers), Object.class);
+        log.info("GET {} completado", url);
+        return response.getBody();
+    }
+
+    private Object ejecutarGetConVariable(String url, String token, Object... uriVars) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        ResponseEntity<Object> response = restTemplate.exchange(
+                url, HttpMethod.GET, new HttpEntity<>(headers), Object.class, uriVars);
+        log.info("GET {} vars={} completado", url, uriVars);
+        return response.getBody();
+    }
+
+    private Object ejecutarGetPublico(String url) {
+        ResponseEntity<Object> response = restTemplate.exchange(
+                url, HttpMethod.GET, HttpEntity.EMPTY, Object.class);
+        log.info("GET publico {} completado", url);
+        return response.getBody();
+    }
+
+    private Object ejecutarGetPublicoConVariable(String url, Object... uriVars) {
+        ResponseEntity<Object> response = restTemplate.exchange(
+                url, HttpMethod.GET, HttpEntity.EMPTY, Object.class, uriVars);
+        log.info("GET publico {} vars={} completado", url, uriVars);
         return response.getBody();
     }
 }
