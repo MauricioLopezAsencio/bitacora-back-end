@@ -12,8 +12,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -30,6 +37,12 @@ public class BitacoraService implements IBitacoraService {
 
     private static final String ACTIVIDADES_POR_TIPO_URL =
             "https://scoca.casystem.com.mx/api/bitacora/actividades/{idTipoActividad}";
+
+    private static final String REGISTROS_POR_EMPLEADO_FECHA_URL =
+            "https://scoca.casystem.com.mx/api/bitacora/registrosByEmpleadoAndFechaRegistro/{idEmpleado}/{fecha}";
+
+    private static final DateTimeFormatter TIME_FMT    = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter TIME_PARSE  = DateTimeFormatter.ofPattern("HH:mm[:ss]");
 
     private final RestTemplate restTemplate;
     private final BitacoraTokenManager tokenManager;
@@ -105,6 +118,154 @@ public class BitacoraService implements IBitacoraService {
         }
     }
 
+    // ─── Registro con partición anti-traslape ────────────────────────────────
+
+    @Override
+    public List<Object> registrarActividadConParticion(RegistrarActividadRequest request) {
+        Long idEmpleado = tokenManager.obtenerIdEmpleado(request.getUsername(), request.getPassword());
+        String token    = tokenManager.obtenerToken(request.getUsername(), request.getPassword());
+
+        List<Map<String, Object>> existentes = obtenerRegistrosExistentes(
+                idEmpleado, request.getFechaRegistro().toString(), token, request);
+
+        List<String[]> franjas = calcularFranjas(
+                request.getHoraInicio(), request.getHoraFin(), existentes);
+
+        if (franjas.isEmpty()) {
+            log.warn("Sin franjas disponibles para registrar idEmpleado={} fecha={} horario={}-{}",
+                    idEmpleado, request.getFechaRegistro(),
+                    request.getHoraInicio(), request.getHoraFin());
+            return Collections.emptyList();
+        }
+
+        log.info("Registrando {} franja(s) para idEmpleado={} fecha={}",
+                franjas.size(), idEmpleado, request.getFechaRegistro());
+
+        List<Object> resultados = new ArrayList<>();
+        for (String[] franja : franjas) {
+            try {
+                resultados.add(ejecutarRegistroConHorario(request, idEmpleado, token, franja[0], franja[1]));
+            } catch (HttpClientErrorException ex) {
+                if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                    token = tokenManager.renovarToken(request.getUsername(), request.getPassword());
+                    resultados.add(ejecutarRegistroConHorario(request, idEmpleado, token, franja[0], franja[1]));
+                } else {
+                    log.error("Error al registrar franja {}-{} idEmpleado={}: {}",
+                            franja[0], franja[1], idEmpleado, ex.getMessage());
+                    throw ex;
+                }
+            }
+        }
+        return resultados;
+    }
+
+    // ─── Consulta de registros existentes ───────────────────────────────────
+
+    @Override
+    public List<Map<String, Object>> obtenerRegistrosPorEmpleadoYFecha(
+            Long idEmpleado, String fecha, String username, String password) {
+        String token = tokenManager.obtenerToken(username, password);
+        try {
+            Object raw = ejecutarGetConVariable(REGISTROS_POR_EMPLEADO_FECHA_URL, token, idEmpleado, fecha);
+            return parsearListaDeRegistros(raw);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                String nuevoToken = tokenManager.renovarToken(username, password);
+                Object raw = ejecutarGetConVariable(REGISTROS_POR_EMPLEADO_FECHA_URL, nuevoToken, idEmpleado, fecha);
+                return parsearListaDeRegistros(raw);
+            }
+            log.warn("No se pudieron obtener registros idEmpleado={} fecha={}: {}", idEmpleado, fecha, ex.getMessage());
+            return Collections.emptyList();
+        } catch (Exception ex) {
+            log.warn("Error inesperado al obtener registros idEmpleado={} fecha={}: {}", idEmpleado, fecha, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> obtenerRegistrosExistentes(
+            Long idEmpleado, String fecha, String token, RegistrarActividadRequest request) {
+        try {
+            Object raw = ejecutarGetConVariable(
+                    REGISTROS_POR_EMPLEADO_FECHA_URL, token, idEmpleado, fecha);
+            return parsearListaDeRegistros(raw);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                String nuevoToken = tokenManager.renovarToken(request.getUsername(), request.getPassword());
+                Object raw = ejecutarGetConVariable(
+                        REGISTROS_POR_EMPLEADO_FECHA_URL, nuevoToken, idEmpleado, fecha);
+                return parsearListaDeRegistros(raw);
+            }
+            log.warn("No se pudieron obtener registros existentes idEmpleado={} fecha={}: {}",
+                    idEmpleado, fecha, ex.getMessage());
+            return Collections.emptyList();
+        } catch (Exception ex) {
+            log.warn("Error inesperado al obtener registros existentes: {}", ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parsearListaDeRegistros(Object raw) {
+        if (raw == null) return Collections.emptyList();
+        if (raw instanceof List<?> list) return (List<Map<String, Object>>) list;
+        if (raw instanceof Map<?, ?> map) {
+            Object data = map.get("data");
+            if (data instanceof List<?> list) return (List<Map<String, Object>>) list;
+        }
+        return Collections.emptyList();
+    }
+
+    // ─── Algoritmo de partición de franjas horarias ──────────────────────────
+
+    /**
+     * Dados horaInicio/horaFin de la nueva actividad y los registros existentes ese día,
+     * calcula los intervalos libres (sin traslape).
+     *
+     * Ejemplo:
+     *   Nueva:     09:00 – 17:00
+     *   Existente: 13:00 – 14:00
+     *   Resultado: [09:00-13:00, 14:00-17:00]
+     */
+    private List<String[]> calcularFranjas(String horaInicioStr, String horaFinStr,
+                                            List<Map<String, Object>> existentes) {
+        LocalTime inicio = LocalTime.parse(horaInicioStr, TIME_FMT);
+        LocalTime fin    = LocalTime.parse(horaFinStr,    TIME_FMT);
+
+        List<LocalTime[]> ocupados = existentes.stream()
+                .filter(r -> r.get("horaInicio") != null && r.get("horaFin") != null)
+                .map(r -> new LocalTime[]{
+                        LocalTime.parse(r.get("horaInicio").toString(), TIME_PARSE),
+                        LocalTime.parse(r.get("horaFin").toString(),    TIME_PARSE)
+                })
+                .filter(o -> o[0].isBefore(fin) && o[1].isAfter(inicio)) // solo los que se traslapen
+                .sorted(Comparator.comparing(o -> o[0]))
+                .collect(Collectors.toList());
+
+        if (ocupados.isEmpty()) {
+            return Collections.singletonList(new String[]{horaInicioStr, horaFinStr});
+        }
+
+        List<String[]> franjas = new ArrayList<>();
+        LocalTime cursor = inicio;
+
+        for (LocalTime[] ocupado : ocupados) {
+            if (ocupado[0].isAfter(cursor)) {
+                franjas.add(new String[]{cursor.format(TIME_FMT), ocupado[0].format(TIME_FMT)});
+            }
+            if (ocupado[1].isAfter(cursor)) {
+                cursor = ocupado[1];
+            }
+            if (!cursor.isBefore(fin)) break;
+        }
+
+        if (cursor.isBefore(fin)) {
+            franjas.add(new String[]{cursor.format(TIME_FMT), fin.format(TIME_FMT)});
+        }
+
+        return franjas;
+    }
+
     private Object ejecutarRegistro(RegistrarActividadRequest request, Long idEmpleado, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
@@ -123,6 +284,30 @@ public class BitacoraService implements IBitacoraService {
         ResponseEntity<Object> response = restTemplate.postForEntity(
                 REGISTRAR_ACTIVIDAD_URL, new HttpEntity<>(body, headers), Object.class);
         log.info("Actividad registrada en bitácora idEmpleado={} idProyecto={}", idEmpleado, request.getIdProyecto());
+        return response.getBody();
+    }
+
+    private Object ejecutarRegistroConHorario(RegistrarActividadRequest request,
+                                               Long idEmpleado, String token,
+                                               String horaInicio, String horaFin) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("idEmpleado",      idEmpleado);
+        body.put("idActividad",     request.getIdActividad());
+        body.put("idTipoActividad", request.getIdTipoActividad());
+        body.put("idProyecto",      request.getIdProyecto());
+        body.put("descripcion",     request.getDescripcion());
+        body.put("fechaRegistro",   request.getFechaRegistro().toString());
+        body.put("horaInicio",      horaInicio);
+        body.put("horaFin",         horaFin);
+
+        ResponseEntity<Object> response = restTemplate.postForEntity(
+                REGISTRAR_ACTIVIDAD_URL, new HttpEntity<>(body, headers), Object.class);
+        log.info("Franja registrada idEmpleado={} idProyecto={} horario={}-{}",
+                idEmpleado, request.getIdProyecto(), horaInicio, horaFin);
         return response.getBody();
     }
 

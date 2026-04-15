@@ -1,3 +1,120 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
+## Project Overview
+
+**bt-backend** is a Spring Boot 3.2 REST API that serves as a middleware/proxy between a frontend and two external systems:
+- **Scoca/Bitácora** (`scoca.casystem.com.mx`) — employee activity tracking system, accessed via username+password login that returns a Bearer token (MD5-hashed password, 23h TTL cached in `BitacoraTokenManager`)
+- **Microsoft Graph API** — reads calendar events (`/me/calendarView`) to auto-generate activity entries
+
+The app also manages its own domain: tool assignment tracking for employees (herramientas/empleados), with its own PostgreSQL database on Supabase.
+
+---
+
+## Build & Run
+
+```bash
+# Build
+mvn clean package -DskipTests
+
+# Run (requires env vars below)
+mvn spring-boot:run
+
+# Run with local profile (disables Flyway, no remote DB needed)
+mvn spring-boot:run -Dspring.profiles.active=local
+
+# Run tests
+mvn test
+
+# Run a single test class
+mvn test -Dtest=BitacoraServiceTest
+```
+
+**Required environment variables:**
+```
+SUPABASE_PASSWORD       # PostgreSQL password
+JWT_SECRET              # Base64-encoded secret (min 256 bits)
+```
+
+**Optional overrides** (have defaults in `application.properties`):
+```
+SUPABASE_USER / BITACORA_USERNAME / BITACORA_PASSWORD / MAIL_PASSWORD
+```
+
+Server runs on **port 3000**.
+
+---
+
+## Architecture
+
+### Layer structure (flat package, not domain-split)
+All code lives under `com.spring.security.jwt`:
+```
+controller/   HTTP endpoints — delegates to services, never contains logic
+service/      Business logic + external HTTP calls via RestTemplate
+dto/          Request/Response objects — all API responses use ApiResponse<T>
+model/        JPA entities (own DB domain only)
+repository/   Spring Data JPA repos + custom JDBC impls
+security/     JwtFilter, JwtService, UserDetailsServiceImpl
+config/       CorsConfig (SecurityFilterChain), MdcFilter, RestTemplateConfig
+exception/    GlobalExceptionHandler, NegocioException, TokenExpiradoException
+dto/microsoft/ Graph API response DTOs
+```
+
+### Two distinct data flows
+
+**1. Own domain (Empleados/Herramientas)**
+`Controller → Service → Repository (JPA) → PostgreSQL/Supabase`
+Schema managed by Flyway migrations in `src/main/resources/db/migration/`.
+
+**2. External proxy (Bitácora + Calendario)**
+`Controller → Service → RestTemplate → External API`
+No local persistence. `BitacoraTokenManager` caches Bearer tokens per username (23h TTL, auto-renews on 401).
+
+### Key service interactions
+
+`ActividadService.obtenerActividades()` orchestrates the main flow:
+1. Login to Bitácora → get `idEmpleado` + token
+2. Fetch Microsoft Graph `calendarView` for the date range (with pagination)
+3. Fetch employee projects from Bitácora
+4. Fetch `tipoActividad` catalog from Bitácora
+5. Match calendar events to projects by keyword (splits event subject on `|`, `-`, `:`, spaces; matches against project description after the first `-`)
+6. Returns `ActividadResultDto` with: matched activities, unmatched sessions, available projects, and activity types
+
+`BitacoraService.registrarActividadConParticion()` handles overlap-safe registration:
+1. Fetches existing registrations for employee+date from Bitácora
+2. Calculates free time slots (`calcularFranjas`) by subtracting occupied intervals
+3. Registers one entry per free slot — returns `List<Object>`
+4. Time format from Bitácora is `HH:mm:ss`; formatter uses `HH:mm[:ss]` to accept both
+
+### Security
+- All `/api/v1/bitacora/**`, `/api/v1/actividades/**`, `/api/v1/calendario/**` are `permitAll()` — no JWT required
+- `/api/v1/auth/**` is public; everything else requires a valid JWT
+- JWT is validated in `JwtFilter` but does NOT block the chain on failure — it just skips setting authentication
+
+### Response contract
+Every endpoint returns `ApiResponse<T>` (defined in `dto/ApiResponse.java`). Never return raw entities or plain objects from controllers.
+
+---
+
+## Database (own domain)
+
+- **Engine:** PostgreSQL on Supabase
+- **Connection pooling:** HikariCP via PgBouncer transaction pooler (port 6543); Flyway uses session pooler (port 5432) for advisory locks
+- **Migrations:** `src/main/resources/db/migration/V{n}__description.sql`
+- The DB naming convention (below) was designed for SQL Server but the actual DB is PostgreSQL — follow the prefixes/patterns but use PostgreSQL DDL syntax for new migrations
+
+---
+
+## Holidays
+
+`FeriadosMexicoService` filters out Mexican public holidays from calendar event expansion. The Semana Santa dates are **hardcoded** and must be updated manually each year.
+
+---
+
 # Convención Oficial de Nomenclatura – Modelado de Datos (SQL Server 2022)
 
 ## Contexto

@@ -13,8 +13,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,8 +50,18 @@ private final ICalendarioService calendarioService;
                 request.getUsername(), request.getPassword());
         Object tiposActividad = obtenerTiposActividad(request.getUsername(), request.getPassword());
 
-        Map<Boolean, List<ActividadDto>> particion = eventos.stream()
+        List<ActividadDto> todas = eventos.stream()
                 .map(evento -> mapearActividad(evento, idEmpleado, proyectos))
+                .toList();
+
+        Set<String> registradas = obtenerClavesRegistradas(idEmpleado, todas,
+                request.getUsername(), request.getPassword());
+
+        List<ActividadDto> pendientes = todas.stream()
+                .filter(a -> !registradas.contains(a.getFechaRegistro() + "|" + a.getHoraInicio()))
+                .toList();
+
+        Map<Boolean, List<ActividadDto>> particion = pendientes.stream()
                 .collect(Collectors.partitioningBy(a -> !NA.equals(a.getIdProyecto())));
 
         return ActividadResultDto.builder()
@@ -58,6 +70,33 @@ private final ICalendarioService calendarioService;
                 .proyectosDisponibles(mapearProyectos(proyectos))
                 .tiposActividad(tiposActividad)
                 .build();
+    }
+
+    // ─── Filtro de sesiones ya registradas en SCO ───────────────────────────
+
+    private Set<String> obtenerClavesRegistradas(Long idEmpleado, List<ActividadDto> actividades,
+                                                  String username, String password) {
+        Set<String> fechas = actividades.stream()
+                .map(ActividadDto::getFechaRegistro)
+                .collect(Collectors.toSet());
+
+        Set<String> claves = new HashSet<>();
+        for (String fecha : fechas) {
+            try {
+                List<Map<String, Object>> registros =
+                        bitacoraService.obtenerRegistrosPorEmpleadoYFecha(idEmpleado, fecha, username, password);
+                for (Map<String, Object> r : registros) {
+                    if (r.get("horaInicio") != null) {
+                        String hora = r.get("horaInicio").toString().substring(0, 5);
+                        claves.add(fecha + "|" + hora);
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("No se pudieron obtener registros SCO para filtrado fecha={}: {}", fecha, ex.getMessage());
+            }
+        }
+        log.info("Claves ya registradas en SCO idEmpleado={} total={}", idEmpleado, claves.size());
+        return claves;
     }
 
     // ─── Tipos de actividad ──────────────────────────────────────────────────

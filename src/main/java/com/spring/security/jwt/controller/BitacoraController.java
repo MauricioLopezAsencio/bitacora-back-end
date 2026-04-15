@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
 
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/bitacora")
@@ -27,20 +28,35 @@ public class BitacoraController {
     }
 
     @PostMapping("/actividades")
-    public ResponseEntity<ApiResponse<Object>> registrarActividad(
+    public ResponseEntity<ApiResponse<List<Object>>> registrarActividad(
             @Valid @RequestBody RegistrarActividadRequest request,
             HttpServletRequest servletRequest) {
 
         try {
-            Object data = bitacoraService.registrarActividad(request);
-            return ResponseEntity.ok(ApiResponse.ok(data, "Actividad registrada exitosamente")
+            List<Object> data = bitacoraService.registrarActividadConParticion(request);
+
+            if (data.isEmpty()) {
+                return ResponseEntity.unprocessableEntity()
+                        .body(ApiResponse.<List<Object>>builder()
+                                .status(422)
+                                .message("El horario solicitado ya está completamente cubierto por registros existentes")
+                                .errorCode("HORARIO_CUBIERTO")
+                                .path(servletRequest.getRequestURI())
+                                .build());
+            }
+
+            String mensaje = data.size() == 1
+                    ? "Actividad registrada exitosamente"
+                    : data.size() + " franjas registradas por traslape con actividades existentes";
+
+            return ResponseEntity.ok(ApiResponse.ok(data, mensaje)
                     .toBuilder().path(servletRequest.getRequestURI()).build());
 
         } catch (HttpClientErrorException ex) {
             HttpStatus httpStatus = HttpStatus.resolve(ex.getStatusCode().value());
             String reason = httpStatus != null ? httpStatus.getReasonPhrase() : "Error desconocido";
             return ResponseEntity.status(ex.getStatusCode())
-                    .body(ApiResponse.<Object>builder()
+                    .body(ApiResponse.<List<Object>>builder()
                             .status(ex.getStatusCode().value())
                             .message("Error al registrar actividad en bitácora: " + reason)
                             .errorCode("BITACORA_API_ERROR")
