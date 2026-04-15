@@ -17,7 +17,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/bt-backend
+            cd ~/bitacora-back-end
             git pull
             docker stop bt-backend-container || true
             docker rm bt-backend-container || true
