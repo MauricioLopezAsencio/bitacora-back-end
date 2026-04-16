@@ -20,4 +20,6 @@ public interface IBitacoraService {
     Object obtenerActividadesPorTipo(Integer idTipoActividad, String username, String password);
 
     List<Map<String, Object>> obtenerRegistrosPorEmpleadoYFecha(Long idEmpleado, String fecha, String username, String password);
+
+    List<String[]> calcularFranjasLibres(String horaInicio, String horaFin, List<Map<String, Object>> existentes);
 }

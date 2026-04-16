@@ -227,6 +227,12 @@ public class BitacoraService implements IBitacoraService {
      *   Existente: 13:00 – 14:00
      *   Resultado: [09:00-13:00, 14:00-17:00]
      */
+    @Override
+    public List<String[]> calcularFranjasLibres(String horaInicioStr, String horaFinStr,
+                                                  List<Map<String, Object>> existentes) {
+        return calcularFranjas(horaInicioStr, horaFinStr, existentes);
+    }
+
     private List<String[]> calcularFranjas(String horaInicioStr, String horaFinStr,
                                             List<Map<String, Object>> existentes) {
         LocalTime inicio = LocalTime.parse(horaInicioStr, TIME_FMT);

@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,18 +49,14 @@ private final ICalendarioService calendarioService;
                 request.getUsername(), request.getPassword());
         Object tiposActividad = obtenerTiposActividad(request.getUsername(), request.getPassword());
 
+        Map<String, List<Map<String, Object>>> registrosPorFecha =
+                obtenerRegistrosPorFecha(idEmpleado, eventos, request.getUsername(), request.getPassword());
+
         List<ActividadDto> todas = eventos.stream()
-                .map(evento -> mapearActividad(evento, idEmpleado, proyectos))
+                .flatMap(evento -> expandirEnFranjas(evento, idEmpleado, proyectos, registrosPorFecha).stream())
                 .toList();
 
-        Set<String> registradas = obtenerClavesRegistradas(idEmpleado, todas,
-                request.getUsername(), request.getPassword());
-
-        List<ActividadDto> pendientes = todas.stream()
-                .filter(a -> !registradas.contains(a.getFechaRegistro() + "|" + a.getHoraInicio()))
-                .toList();
-
-        Map<Boolean, List<ActividadDto>> particion = pendientes.stream()
+        Map<Boolean, List<ActividadDto>> particion = todas.stream()
                 .collect(Collectors.partitioningBy(a -> !NA.equals(a.getIdProyecto())));
 
         return ActividadResultDto.builder()
@@ -72,31 +67,61 @@ private final ICalendarioService calendarioService;
                 .build();
     }
 
-    // ─── Filtro de sesiones ya registradas en SCO ───────────────────────────
+    // ─── Registros existentes agrupados por fecha ────────────────────────────
 
-    private Set<String> obtenerClavesRegistradas(Long idEmpleado, List<ActividadDto> actividades,
-                                                  String username, String password) {
-        Set<String> fechas = actividades.stream()
-                .map(ActividadDto::getFechaRegistro)
+    private Map<String, List<Map<String, Object>>> obtenerRegistrosPorFecha(
+            Long idEmpleado, List<CalendarioEventoDto> eventos, String username, String password) {
+
+        Set<String> fechas = eventos.stream()
+                .map(e -> convertirFecha(e.getStart().split(" ")[0]))
                 .collect(Collectors.toSet());
 
-        Set<String> claves = new HashSet<>();
+        Map<String, List<Map<String, Object>>> resultado = new java.util.HashMap<>();
         for (String fecha : fechas) {
             try {
-                List<Map<String, Object>> registros =
-                        bitacoraService.obtenerRegistrosPorEmpleadoYFecha(idEmpleado, fecha, username, password);
-                for (Map<String, Object> r : registros) {
-                    if (r.get("horaInicio") != null) {
-                        String hora = r.get("horaInicio").toString().substring(0, 5);
-                        claves.add(fecha + "|" + hora);
-                    }
-                }
+                resultado.put(fecha,
+                        bitacoraService.obtenerRegistrosPorEmpleadoYFecha(idEmpleado, fecha, username, password));
             } catch (Exception ex) {
-                log.warn("No se pudieron obtener registros SCO para filtrado fecha={}: {}", fecha, ex.getMessage());
+                log.warn("No se pudieron obtener registros SCO fecha={}: {}", fecha, ex.getMessage());
+                resultado.put(fecha, Collections.emptyList());
             }
         }
-        log.info("Claves ya registradas en SCO idEmpleado={} total={}", idEmpleado, claves.size());
-        return claves;
+        return resultado;
+    }
+
+    // ─── Expande un evento en sus franjas libres ─────────────────────────────
+
+    private List<ActividadDto> expandirEnFranjas(CalendarioEventoDto evento, Long idEmpleado,
+                                                  List<Map<String, Object>> proyectos,
+                                                  Map<String, List<Map<String, Object>>> registrosPorFecha) {
+        String[] startParts = evento.getStart().split(" ");
+        String[] endParts   = evento.getEnd().split(" ");
+        String fecha        = convertirFecha(startParts[0]);
+        String horaInicio   = startParts[1];
+        String horaFin      = endParts[1];
+
+        List<Map<String, Object>> registrosDelDia = registrosPorFecha.getOrDefault(fecha, Collections.emptyList());
+        List<String[]> franjas = bitacoraService.calcularFranjasLibres(horaInicio, horaFin, registrosDelDia);
+
+        if (franjas.isEmpty()) {
+            log.debug("Evento completamente cubierto, se omite subject='{}' fecha={} horario={}-{}",
+                    evento.getSubject(), fecha, horaInicio, horaFin);
+            return Collections.emptyList();
+        }
+
+        Object idProyecto = findProyecto(evento.getSubject(), proyectos);
+        return franjas.stream()
+                .map(franja -> ActividadDto.builder()
+                        .idEmpleado(idEmpleado)
+                        .idActividad(resolverIdActividad(evento.getModalidad()))
+                        .idTipoActividad(ID_TIPO_ACTIVIDAD)
+                        .idProyecto(idProyecto)
+                        .descripcion(evento.getSubject())
+                        .fechaRegistro(fecha)
+                        .horaInicio(franja[0])
+                        .horaFin(franja[1])
+                        .build())
+                .toList();
     }
 
     // ─── Tipos de actividad ──────────────────────────────────────────────────
@@ -121,26 +146,6 @@ private final ICalendarioService calendarioService;
                         .descripcion(p.get("descripcion").toString())
                         .build())
                 .toList();
-    }
-
-    // ─── Mapeo principal ─────────────────────────────────────────────────────
-
-    private ActividadDto mapearActividad(CalendarioEventoDto evento,
-                                         Long idEmpleado,
-                                         List<Map<String, Object>> proyectos) {
-        String[] startParts = evento.getStart().split(" ");
-        String[] endParts   = evento.getEnd().split(" ");
-
-        return ActividadDto.builder()
-                .idEmpleado(idEmpleado)
-                .idActividad(resolverIdActividad(evento.getModalidad()))
-                .idTipoActividad(ID_TIPO_ACTIVIDAD)
-                .idProyecto(findProyecto(evento.getSubject(), proyectos))
-                .descripcion(evento.getSubject())
-                .fechaRegistro(convertirFecha(startParts[0]))
-                .horaInicio(startParts[1])
-                .horaFin(endParts[1])
-                .build();
     }
 
     // ─── idActividad según modalidad ─────────────────────────────────────────
