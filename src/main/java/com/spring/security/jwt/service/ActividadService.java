@@ -109,25 +109,39 @@ private final ICalendarioService calendarioService;
         Object idProyecto = findProyecto(evento.getSubject(), proyectos);
         List<Map<String, Object>> registrosDelDia = registrosPorFecha.getOrDefault(fecha, Collections.emptyList());
 
+        List<Map<String, Object>> sesionesDia = registrosDelDia.stream()
+                .filter(r -> {
+                    Object idAct = r.get("idActividad");
+                    if (idAct == null) return false;
+                    long id = ((Number) idAct).longValue();
+                    return id == ID_SESION_INTERNA || id == ID_SESION_EXTERNA;
+                })
+                .toList();
+
+        if (NA.equals(idProyecto)) {
+            // Sesiones: recorrer/partir usando solo registros de tipo sesión en Scoca
+            List<String[]> franjas = calcularFranjasLibres(horaInicio, horaFin, sesionesDia);
+            if (franjas.isEmpty()) {
+                log.debug("Sesión completamente ocupada en Scoca, se omite subject='{}' fecha={} horario={}-{}",
+                        evento.getSubject(), fecha, horaInicio, horaFin);
+                return Collections.emptyList();
+            }
+            return franjas.stream()
+                    .map(f -> buildActividadDto(idEmpleado, evento, idProyecto, fecha, f[0], f[1]))
+                    .toList();
+        }
+
+        // Actividades con proyecto: cualquier registro en Scoca (sesión u otro tipo) bloquea el horario
         List<String[]> franjas = calcularFranjasLibres(horaInicio, horaFin, registrosDelDia);
 
         if (franjas.isEmpty()) {
-            log.debug("Horario completamente ocupado en Scoca, se omite subject='{}' fecha={} horario={}-{}",
+            log.debug("Actividad ya registrada en Scoca, se omite subject='{}' fecha={} horario={}-{}",
                     evento.getSubject(), fecha, horaInicio, horaFin);
             return Collections.emptyList();
         }
 
         return franjas.stream()
-                .map(f -> ActividadDto.builder()
-                        .idEmpleado(idEmpleado)
-                        .idActividad(resolverIdActividad(evento.getModalidad()))
-                        .idTipoActividad(ID_TIPO_ACTIVIDAD)
-                        .idProyecto(idProyecto)
-                        .descripcion(evento.getSubject())
-                        .fechaRegistro(fecha)
-                        .horaInicio(f[0])
-                        .horaFin(f[1])
-                        .build())
+                .map(f -> buildActividadDto(idEmpleado, evento, idProyecto, fecha, f[0], f[1]))
                 .toList();
     }
 
@@ -171,6 +185,21 @@ private final ICalendarioService calendarioService;
         }
 
         return franjas;
+    }
+
+    private ActividadDto buildActividadDto(Long idEmpleado, CalendarioEventoDto evento,
+                                            Object idProyecto, String fecha,
+                                            String horaInicio, String horaFin) {
+        return ActividadDto.builder()
+                .idEmpleado(idEmpleado)
+                .idActividad(resolverIdActividad(evento.getModalidad()))
+                .idTipoActividad(ID_TIPO_ACTIVIDAD)
+                .idProyecto(idProyecto)
+                .descripcion(evento.getSubject())
+                .fechaRegistro(fecha)
+                .horaInicio(horaInicio)
+                .horaFin(horaFin)
+                .build();
     }
 
     private LocalTime parsearHora(String hora) {
