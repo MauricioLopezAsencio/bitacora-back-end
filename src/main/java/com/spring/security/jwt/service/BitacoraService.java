@@ -192,9 +192,17 @@ public class BitacoraService implements IBitacoraService {
 
     /**
      * Para cada registro de Scoca que se traslape con [newStart, newEnd]:
-     *   - Si el registro termina después de newEnd → moverlo para que empiece en newEnd
-     *   - Si el registro termina antes o en newEnd  → no hace falta editarlo (queda dentro)
-     * Luego registra la nueva actividad en [newStart, newEnd].
+     *
+     *   Hay antes (rS < nS) y después (rE > nE):
+     *     → PUT existente a [nE, rE]  +  POST nuevo [rS, nS] (preserva las horas anteriores)
+     *   Solo antes (rS < nS, rE <= nE):
+     *     → PUT existente a [rS, nS]  (recorta su fin)
+     *   Solo después (rS >= nS, rE > nE):
+     *     → PUT existente a [nE, rE]  (mueve su inicio)
+     *   Completamente dentro (rS >= nS, rE <= nE):
+     *     → sin cambio (queda cubierto por el nuevo)
+     *
+     * Finalmente POST la nueva actividad en [newStart, newEnd].
      */
     private List<Object> registrarConSeparacion(RegistrarActividadRequest request,
                                                  Long idEmpleado, String token,
@@ -218,17 +226,38 @@ public class BitacoraService implements IBitacoraService {
 
         for (Map<String, Object> reg : superpuestos) {
             Long      idReg = ((Number) reg.get("id")).longValue();
-            LocalTime rE    = LocalTime.parse(reg.get("horaFin").toString(), TIME_PARSE);
+            LocalTime rS    = LocalTime.parse(reg.get("horaInicio").toString(), TIME_PARSE);
+            LocalTime rE    = LocalTime.parse(reg.get("horaFin").toString(),    TIME_PARSE);
 
-            if (rE.isAfter(newEnd)) {
-                // El registro termina después del nuevo → moverlo para que empiece en newEnd
-                log.info("Moviendo registro id={} para que empiece en {}", idReg, newEnd.format(TIME_FMT));
+            boolean hayAntes   = rS.isBefore(newStart);
+            boolean hayDespues = rE.isAfter(newEnd);
+
+            if (hayAntes && hayDespues) {
+                // El existente envuelve al nuevo: editar parte posterior, insertar parte anterior
+                log.info("Registro id={} envuelve al nuevo [{}-{}], editando parte posterior y creando parte anterior",
+                        idReg, rS.format(TIME_FMT), rE.format(TIME_FMT));
                 resultados.add(actualizarRegistro(idReg,
                         buildUpdateBody(reg, idEmpleado, newEnd.format(TIME_FMT), rE.format(TIME_FMT)),
                         token, request));
+                resultados.add(insertarRegistroExistente(reg, idEmpleado, token, request,
+                        rS.format(TIME_FMT), newStart.format(TIME_FMT)));
+
+            } else if (hayAntes) {
+                // El existente empieza antes del nuevo y termina dentro: recortar su fin
+                log.info("Registro id={} empieza antes del nuevo, recortando horaFin a {}", idReg, newStart.format(TIME_FMT));
+                resultados.add(actualizarRegistro(idReg,
+                        buildUpdateBody(reg, idEmpleado, rS.format(TIME_FMT), newStart.format(TIME_FMT)),
+                        token, request));
+
+            } else if (hayDespues) {
+                // El existente empieza dentro del nuevo y termina después: mover inicio a newEnd
+                log.info("Registro id={} termina después del nuevo, moviendo horaInicio a {}", idReg, newEnd.format(TIME_FMT));
+                resultados.add(actualizarRegistro(idReg,
+                        buildUpdateBody(reg, idEmpleado, newEnd.format(TIME_FMT), rE.format(TIME_FMT)),
+                        token, request));
+
             } else {
-                // El registro queda completamente dentro del nuevo intervalo — no se edita
-                log.info("Registro id={} queda dentro del nuevo intervalo, se omite edición", idReg);
+                log.info("Registro id={} queda completamente dentro del nuevo intervalo, sin cambio", idReg);
             }
         }
 
@@ -240,6 +269,42 @@ public class BitacoraService implements IBitacoraService {
                 request.getHoraInicio(), request.getHoraFin());
 
         return resultados;
+    }
+
+    private Object insertarRegistroExistente(Map<String, Object> reg, Long idEmpleado,
+                                              String token, RegistrarActividadRequest request,
+                                              String horaInicio, String horaFin) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("idEmpleado",      idEmpleado);
+        body.put("idActividad",     reg.get("idActividad"));
+        body.put("idTipoActividad", reg.get("idTipoActividad"));
+        body.put("idProyecto",      reg.get("idProyecto"));
+        body.put("descripcion",     reg.get("descripcion"));
+        body.put("fechaRegistro",   reg.get("fechaRegistro"));
+        body.put("horaInicio",      horaInicio);
+        body.put("horaFin",         horaFin);
+
+        log.info("POST {} (parte anterior del existente) horaInicio={} horaFin={}",
+                REGISTRAR_ACTIVIDAD_URL, horaInicio, horaFin);
+
+        try {
+            ResponseEntity<Object> response = restTemplate.postForEntity(
+                    REGISTRAR_ACTIVIDAD_URL, new HttpEntity<>(body, headers), Object.class);
+            return response.getBody();
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                String nuevoToken = tokenManager.renovarToken(request.getUsername(), request.getPassword());
+                headers.setBearerAuth(nuevoToken);
+                ResponseEntity<Object> response = restTemplate.postForEntity(
+                        REGISTRAR_ACTIVIDAD_URL, new HttpEntity<>(body, headers), Object.class);
+                return response.getBody();
+            }
+            throw ex;
+        }
     }
 
     private Object actualizarRegistro(Long idRegistro, Map<String, Object> body,

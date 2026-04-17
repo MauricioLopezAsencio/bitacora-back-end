@@ -12,6 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +24,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class ActividadService implements IActividadService {
+
+    private static final DateTimeFormatter TIME_PARSE = DateTimeFormatter.ofPattern("HH:mm[:ss]");
+    private static final DateTimeFormatter TIME_FMT   = DateTimeFormatter.ofPattern("HH:mm");
 
     // ─── IDs de actividad — ajustar según catálogo de bitácora ──────────────
     private static final long ID_SESION_INTERNA = 1L;
@@ -89,7 +95,7 @@ private final ICalendarioService calendarioService;
         return resultado;
     }
 
-    // ─── Expande un evento — muestra si no está ya registrado en Scoca ──────
+    // ─── Expande un evento en sus franjas libres respecto a Scoca ───────────
 
     private List<ActividadDto> expandirEnFranjas(CalendarioEventoDto evento, Long idEmpleado,
                                                   List<Map<String, Object>> proyectos,
@@ -103,37 +109,77 @@ private final ICalendarioService calendarioService;
         Object idProyecto = findProyecto(evento.getSubject(), proyectos);
         List<Map<String, Object>> registrosDelDia = registrosPorFecha.getOrDefault(fecha, Collections.emptyList());
 
-        if (estaYaRegistrado(idProyecto, horaInicio, horaFin, registrosDelDia)) {
-            log.debug("Evento ya registrado en Scoca, se omite subject='{}' fecha={}", evento.getSubject(), fecha);
+        List<String[]> franjas = calcularFranjasLibres(horaInicio, horaFin, registrosDelDia);
+
+        if (franjas.isEmpty()) {
+            log.debug("Horario completamente ocupado en Scoca, se omite subject='{}' fecha={} horario={}-{}",
+                    evento.getSubject(), fecha, horaInicio, horaFin);
             return Collections.emptyList();
         }
 
-        return List.of(ActividadDto.builder()
-                .idEmpleado(idEmpleado)
-                .idActividad(resolverIdActividad(evento.getModalidad()))
-                .idTipoActividad(ID_TIPO_ACTIVIDAD)
-                .idProyecto(idProyecto)
-                .descripcion(evento.getSubject())
-                .fechaRegistro(fecha)
-                .horaInicio(horaInicio)
-                .horaFin(horaFin)
-                .build());
+        return franjas.stream()
+                .map(f -> ActividadDto.builder()
+                        .idEmpleado(idEmpleado)
+                        .idActividad(resolverIdActividad(evento.getModalidad()))
+                        .idTipoActividad(ID_TIPO_ACTIVIDAD)
+                        .idProyecto(idProyecto)
+                        .descripcion(evento.getSubject())
+                        .fechaRegistro(fecha)
+                        .horaInicio(f[0])
+                        .horaFin(f[1])
+                        .build())
+                .toList();
     }
 
-    private boolean estaYaRegistrado(Object idProyecto, String horaInicio, String horaFin,
-                                      List<Map<String, Object>> registros) {
-        if (NA.equals(idProyecto)) return false;
-        return registros.stream().anyMatch(r -> {
-            Object regProyecto = r.get("idProyecto");
-            if (regProyecto == null) return false;
-            boolean mismoProyecto = idProyecto instanceof Long lp &&
-                                    regProyecto instanceof Number n &&
-                                    lp.equals(n.longValue());
-            if (!mismoProyecto) return false;
-            String regInicio = normalizarHora(r.get("horaInicio"));
-            String regFin    = normalizarHora(r.get("horaFin"));
-            return horaInicio.equals(regInicio) && horaFin.equals(regFin);
-        });
+    // ─── Calcula intervalos del evento no cubiertos por registros Scoca ──────
+
+    private List<String[]> calcularFranjasLibres(String horaInicioStr, String horaFinStr,
+                                                   List<Map<String, Object>> registros) {
+        LocalTime inicio = LocalTime.parse(horaInicioStr, TIME_PARSE);
+        LocalTime fin    = LocalTime.parse(horaFinStr,    TIME_PARSE);
+
+        List<LocalTime[]> ocupados = registros.stream()
+                .filter(r -> r.get("horaInicio") != null && r.get("horaFin") != null)
+                .map(r -> new LocalTime[]{
+                        parsearHora(normalizarHora(r.get("horaInicio"))),
+                        parsearHora(normalizarHora(r.get("horaFin")))
+                })
+                .filter(o -> o[0] != null && o[1] != null)
+                .filter(o -> o[0].isBefore(fin) && o[1].isAfter(inicio))
+                .sorted(java.util.Comparator.comparing(o -> o[0]))
+                .toList();
+
+        if (ocupados.isEmpty()) {
+            return Collections.singletonList(new String[]{horaInicioStr, horaFinStr});
+        }
+
+        List<String[]> franjas = new ArrayList<>();
+        LocalTime cursor = inicio;
+
+        for (LocalTime[] ocupado : ocupados) {
+            if (ocupado[0].isAfter(cursor)) {
+                franjas.add(new String[]{cursor.format(TIME_FMT), ocupado[0].format(TIME_FMT)});
+            }
+            if (ocupado[1].isAfter(cursor)) {
+                cursor = ocupado[1];
+            }
+            if (!cursor.isBefore(fin)) break;
+        }
+
+        if (cursor.isBefore(fin)) {
+            franjas.add(new String[]{cursor.format(TIME_FMT), fin.format(TIME_FMT)});
+        }
+
+        return franjas;
+    }
+
+    private LocalTime parsearHora(String hora) {
+        try {
+            return LocalTime.parse(hora, TIME_PARSE);
+        } catch (Exception ex) {
+            log.warn("No se pudo parsear hora '{}'", hora);
+            return null;
+        }
     }
 
     private String normalizarHora(Object hora) {
