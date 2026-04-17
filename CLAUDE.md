@@ -59,7 +59,7 @@ dto/          Request/Response objects — all API responses use ApiResponse<T>
 model/        JPA entities (own DB domain only)
 repository/   Spring Data JPA repos + custom JDBC impls
 security/     JwtFilter, JwtService, UserDetailsServiceImpl
-config/       CorsConfig (SecurityFilterChain), MdcFilter, RestTemplateConfig
+config/       CorsConfig (SecurityFilterChain), MdcFilter, RestTemplateConfig, SchedulerConfig
 exception/    GlobalExceptionHandler, NegocioException, TokenExpiradoException
 dto/microsoft/ Graph API response DTOs
 ```
@@ -78,25 +78,53 @@ No local persistence. `BitacoraTokenManager` caches Bearer tokens per username (
 
 `ActividadService.obtenerActividades()` orchestrates the main flow:
 1. Login to Bitácora → get `idEmpleado` + token
-2. Fetch Microsoft Graph `calendarView` for the date range (with pagination)
+2. Fetch Microsoft Graph `calendarView` for the date range (with pagination via `@odata.nextLink`)
 3. Fetch employee projects from Bitácora
 4. Fetch `tipoActividad` catalog from Bitácora
-5. Match calendar events to projects by keyword (splits event subject on `|`, `-`, `:`, spaces; matches against project description after the first `-`)
-6. Returns `ActividadResultDto` with: matched activities, unmatched sessions, available projects, and activity types
+5. Fetch existing Scoca registrations for each date in the range
+6. For each calendar event, call `expandirEnFranjas()` which classifies it as **actividad** (matched to a project) or **sesión** (unmatched, `idProyecto = "N/A"`) and applies display filtering against Scoca registrations
+7. Returns `ActividadResultDto` with: matched activities, unmatched sessions, available projects, and activity types
+
+**Display filtering rules in `ActividadService.expandirEnFranjas()`:**
+- **Actividades (with project):** `calcularFranjasLibres()` is used with ALL Scoca registrations for that day — if a slot is fully covered by any existing registration, it is hidden. Partial overlaps are split and shown.
+- **Sesiones (NA):** hidden only if Scoca has an **exact** time-range match (`horaInicio` AND `horaFin` both equal). A large covering block (e.g., 9:20–17:00 in Scoca) does NOT hide a smaller session (e.g., 12:00–12:30) — it must be an exact match.
+- `ID_SESION_INTERNA = 1`, `ID_SESION_EXTERNA = 2`, `ID_TIPO_ACTIVIDAD = 3` are hardcoded constants that must match the Scoca catalog. If the catalog changes, update these constants in `ActividadService`.
 
 `BitacoraService.registrarActividadConParticion()` handles overlap-safe registration:
 1. Fetches existing registrations for employee+date from Bitácora
-2. Calculates free time slots (`calcularFranjas`) by subtracting occupied intervals
-3. Registers one entry per free slot — returns `List<Object>`
+2. For each overlapping registration: PUTs it to trim or split around the new slot
+3. POSTs the new activity in the requested slot — returns `List<Object>` (one entry per PUT/POST executed)
 4. Time format from Bitácora is `HH:mm:ss`; formatter uses `HH:mm[:ss]` to accept both
+
+`CalendarioService.obtenerEventos()` fetches Graph calendar events:
+- Paginates via `@odata.nextLink` until all pages are retrieved
+- Filters out `seriesMaster` events (only occurrences and single events are kept)
+- Filters out Mexican public holidays via `FeriadosMexicoService`
+- Converts all timestamps to `America/Mexico_City` timezone
+- Resolves `modalidad`: if all attendees have `@casystem.com.mx` email → `"interna"`, otherwise `"externa"`
 
 ### Security
 - All `/api/v1/bitacora/**`, `/api/v1/actividades/**`, `/api/v1/calendario/**` are `permitAll()` — no JWT required
 - `/api/v1/auth/**` is public; everything else requires a valid JWT
 - JWT is validated in `JwtFilter` but does NOT block the chain on failure — it just skips setting authentication
+- CORS allowed origins: `http://localhost:4200` and `https://bitacora-front.onrender.com`
 
 ### Response contract
 Every endpoint returns `ApiResponse<T>` (defined in `dto/ApiResponse.java`). Never return raw entities or plain objects from controllers.
+
+### Scheduler and email notifications
+`SchedulerConfig` enables Spring scheduling with a 5-thread pool. Two types of email notifications are sent via `EmailService` (Gmail SMTP, inline-HTML):
+- **`boRecordatorios`** — sent to `CorreoNotificacionModel` entries with `boRecordatorios=true`: shift-end reminders when a tool loan is about to expire
+- **`boBitacora`** — sent to entries with `boBitacora=true`: immediate confirmation when a loan is registered
+
+`CorreoNotificacionService` manages the recipient list (CRUD + toggle active). `ConfiguracionService` manages 3 shift configs (MATUTINO/VESPERTINO/NOCTURNO, configurable hours) and system params (`minutosRecordatorio` — how many minutes before shift end to trigger reminder).
+
+`ConfiguracionController` exposes dual routes for backward compatibility:
+- `/api/v1/configuracion/turnos` ↔ `/api/v1/turnos`
+- `/api/v1/configuracion/parametros` ↔ `/api/v1/configuracion/recordatorio`
+
+### Timezone
+The server runs on US-East (Virginia/Render). `app.timezone=America/Mexico_City` is set in `application.properties` and applied at startup so `LocalDateTime.now()`, `LocalTime.now()`, and `ZoneId.systemDefault()` all return Mexico Central time.
 
 ---
 
@@ -502,5 +530,3 @@ GO
 - [ ] No hay doble negación en booleanos (`bo_no_*`)
 - [ ] Unique constraints siguen formato `UQ_<tabla>__<columna>`
 - [ ] Índices siguen formato `IX_<tabla>__<columnas>`
-
- 

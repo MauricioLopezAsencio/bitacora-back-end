@@ -3,6 +3,7 @@ package com.spring.security.jwt.controller;
 import com.spring.security.jwt.dto.ApiResponse;
 import com.spring.security.jwt.dto.BitacoraProyectosRequest;
 import com.spring.security.jwt.dto.RegistrarActividadRequest;
+import com.spring.security.jwt.dto.RegistrosPorFechaRequest;
 import com.spring.security.jwt.service.IBitacoraService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -14,6 +15,7 @@ import org.springframework.web.client.HttpClientErrorException;
 
 import jakarta.validation.constraints.Positive;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/bitacora")
@@ -140,5 +142,19 @@ public class BitacoraController {
                             .path(servletRequest.getRequestURI())
                             .build());
         }
+    }
+
+    @PostMapping("/registros/byFecha")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> obtenerRegistrosPorFecha(
+            @Valid @RequestBody RegistrosPorFechaRequest request,
+            HttpServletRequest servletRequest) {
+
+        Long idEmpleado = bitacoraService.obtenerIdEmpleado(request.getUsername(), request.getPassword());
+        List<Map<String, Object>> data = bitacoraService.obtenerRegistrosPorEmpleadoYFecha(
+                idEmpleado, request.getFecha().toString(),
+                request.getUsername(), request.getPassword());
+
+        return ResponseEntity.ok(ApiResponse.ok(data, "Registros obtenidos exitosamente")
+                .toBuilder().path(servletRequest.getRequestURI()).build());
     }
 }
