@@ -29,6 +29,8 @@ jobs:
             git pull
             docker stop bt-backend-container || true
             docker rm bt-backend-container || true
+            docker system prune -af
+            docker volume prune -f
             docker build --no-cache -t bt-backend .
             docker run -d \
               --name bt-backend-container \
