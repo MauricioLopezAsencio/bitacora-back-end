@@ -21,12 +21,4 @@ public interface IBitacoraService {
 
     List<Map<String, Object>> obtenerRegistrosPorEmpleadoYFecha(Long idEmpleado, String fecha, String username, String password);
 
-    List<String[]> calcularFranjasLibres(String horaInicio, String horaFin, List<Map<String, Object>> existentes);
-
-    /**
-     * Devuelve true si el intervalo [horaInicio, horaFin] está completamente cubierto
-     * SOLO por registros sin proyecto (ACT/placeholder). Devuelve false si hay algún
-     * registro con proyecto que lo cubra (ya registrado correctamente).
-     */
-    boolean estaCubiertoPorActSinProyecto(String horaInicio, String horaFin, List<Map<String, Object>> existentes);
 }

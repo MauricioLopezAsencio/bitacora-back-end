@@ -89,7 +89,7 @@ private final ICalendarioService calendarioService;
         return resultado;
     }
 
-    // ─── Expande un evento en sus franjas libres ─────────────────────────────
+    // ─── Expande un evento — muestra si no está ya registrado en Scoca ──────
 
     private List<ActividadDto> expandirEnFranjas(CalendarioEventoDto evento, Long idEmpleado,
                                                   List<Map<String, Object>> proyectos,
@@ -100,49 +100,46 @@ private final ICalendarioService calendarioService;
         String horaInicio   = startParts[1];
         String horaFin      = endParts[1];
 
-        List<Map<String, Object>> registrosDelDia = registrosPorFecha.getOrDefault(fecha, Collections.emptyList());
-        List<String[]> franjas = bitacoraService.calcularFranjasLibres(horaInicio, horaFin, registrosDelDia);
-
         Object idProyecto = findProyecto(evento.getSubject(), proyectos);
+        List<Map<String, Object>> registrosDelDia = registrosPorFecha.getOrDefault(fecha, Collections.emptyList());
 
-        if (franjas.isEmpty()) {
-            boolean sinProyecto = NA.equals(idProyecto);
-            boolean cubiertoPorAct = !sinProyecto &&
-                    bitacoraService.estaCubiertoPorActSinProyecto(horaInicio, horaFin, registrosDelDia);
-
-            if (sinProyecto || cubiertoPorAct) {
-                // Sesión sin proyecto → siempre mostrar para que el usuario la guarde (split en POST)
-                // Sesión con proyecto cubierta solo por ACT → también mostrar (ACT se partirá)
-                log.debug("Evento incluido para partición en guardado subject='{}' fecha={} horario={}-{} sinProyecto={}",
-                        evento.getSubject(), fecha, horaInicio, horaFin, sinProyecto);
-                return List.of(ActividadDto.builder()
-                        .idEmpleado(idEmpleado)
-                        .idActividad(resolverIdActividad(evento.getModalidad()))
-                        .idTipoActividad(ID_TIPO_ACTIVIDAD)
-                        .idProyecto(idProyecto)
-                        .descripcion(evento.getSubject())
-                        .fechaRegistro(fecha)
-                        .horaInicio(horaInicio)
-                        .horaFin(horaFin)
-                        .build());
-            }
-
-            log.debug("Evento ya registrado con proyecto, se omite subject='{}' fecha={} horario={}-{}",
-                    evento.getSubject(), fecha, horaInicio, horaFin);
+        if (estaYaRegistrado(idProyecto, horaInicio, horaFin, registrosDelDia)) {
+            log.debug("Evento ya registrado en Scoca, se omite subject='{}' fecha={}", evento.getSubject(), fecha);
             return Collections.emptyList();
         }
-        return franjas.stream()
-                .map(franja -> ActividadDto.builder()
-                        .idEmpleado(idEmpleado)
-                        .idActividad(resolverIdActividad(evento.getModalidad()))
-                        .idTipoActividad(ID_TIPO_ACTIVIDAD)
-                        .idProyecto(idProyecto)
-                        .descripcion(evento.getSubject())
-                        .fechaRegistro(fecha)
-                        .horaInicio(franja[0])
-                        .horaFin(franja[1])
-                        .build())
-                .toList();
+
+        return List.of(ActividadDto.builder()
+                .idEmpleado(idEmpleado)
+                .idActividad(resolverIdActividad(evento.getModalidad()))
+                .idTipoActividad(ID_TIPO_ACTIVIDAD)
+                .idProyecto(idProyecto)
+                .descripcion(evento.getSubject())
+                .fechaRegistro(fecha)
+                .horaInicio(horaInicio)
+                .horaFin(horaFin)
+                .build());
+    }
+
+    private boolean estaYaRegistrado(Object idProyecto, String horaInicio, String horaFin,
+                                      List<Map<String, Object>> registros) {
+        if (NA.equals(idProyecto)) return false;
+        return registros.stream().anyMatch(r -> {
+            Object regProyecto = r.get("idProyecto");
+            if (regProyecto == null) return false;
+            boolean mismoProyecto = idProyecto instanceof Long lp &&
+                                    regProyecto instanceof Number n &&
+                                    lp.equals(n.longValue());
+            if (!mismoProyecto) return false;
+            String regInicio = normalizarHora(r.get("horaInicio"));
+            String regFin    = normalizarHora(r.get("horaFin"));
+            return horaInicio.equals(regInicio) && horaFin.equals(regFin);
+        });
+    }
+
+    private String normalizarHora(Object hora) {
+        if (hora == null) return "";
+        String s = hora.toString();
+        return s.length() > 5 ? s.substring(0, 5) : s;
     }
 
     // ─── Tipos de actividad ──────────────────────────────────────────────────

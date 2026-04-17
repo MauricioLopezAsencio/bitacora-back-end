@@ -17,7 +17,6 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,43 +128,7 @@ public class BitacoraService implements IBitacoraService {
         List<Map<String, Object>> existentes = obtenerRegistrosExistentes(
                 idEmpleado, request.getFechaRegistro().toString(), token, request);
 
-        // Sesión sin proyecto → ocupa el horario completo partiendo lo que haya
-        if (request.getIdProyecto() == null) {
-            log.info("Sesión sin proyecto, split directo idEmpleado={} fecha={} horario={}-{}",
-                    idEmpleado, request.getFechaRegistro(),
-                    request.getHoraInicio(), request.getHoraFin());
-            return registrarConSeparacion(request, idEmpleado, token, existentes);
-        }
-
-        List<String[]> franjas = calcularFranjas(
-                request.getHoraInicio(), request.getHoraFin(), existentes);
-
-        if (franjas.isEmpty()) {
-            log.info("Slot cubierto, iniciando partición de registros existentes idEmpleado={} fecha={} horario={}-{}",
-                    idEmpleado, request.getFechaRegistro(),
-                    request.getHoraInicio(), request.getHoraFin());
-            return registrarConSeparacion(request, idEmpleado, token, existentes);
-        }
-
-        log.info("Registrando {} franja(s) para idEmpleado={} fecha={}",
-                franjas.size(), idEmpleado, request.getFechaRegistro());
-
-        List<Object> resultados = new ArrayList<>();
-        for (String[] franja : franjas) {
-            try {
-                resultados.add(ejecutarRegistroConHorario(request, idEmpleado, token, franja[0], franja[1]));
-            } catch (HttpClientErrorException ex) {
-                if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
-                    token = tokenManager.renovarToken(request.getUsername(), request.getPassword());
-                    resultados.add(ejecutarRegistroConHorario(request, idEmpleado, token, franja[0], franja[1]));
-                } else {
-                    log.error("Error al registrar franja {}-{} idEmpleado={}: {}",
-                            franja[0], franja[1], idEmpleado, ex.getMessage());
-                    throw ex;
-                }
-            }
-        }
-        return resultados;
+        return registrarConSeparacion(request, idEmpleado, token, existentes);
     }
 
     // ─── Consulta de registros existentes ───────────────────────────────────
@@ -223,83 +186,6 @@ public class BitacoraService implements IBitacoraService {
             if (data instanceof List<?> list) return (List<Map<String, Object>>) list;
         }
         return Collections.emptyList();
-    }
-
-    // ─── Algoritmo de partición de franjas horarias ──────────────────────────
-
-    /**
-     * Dados horaInicio/horaFin de la nueva actividad y los registros existentes ese día,
-     * calcula los intervalos libres (sin traslape).
-     *
-     * Ejemplo:
-     *   Nueva:     09:00 – 17:00
-     *   Existente: 13:00 – 14:00
-     *   Resultado: [09:00-13:00, 14:00-17:00]
-     */
-    @Override
-    public List<String[]> calcularFranjasLibres(String horaInicioStr, String horaFinStr,
-                                                  List<Map<String, Object>> existentes) {
-        return calcularFranjas(horaInicioStr, horaFinStr, existentes);
-    }
-
-    @Override
-    public boolean estaCubiertoPorActSinProyecto(String horaInicioStr, String horaFinStr,
-                                                   List<Map<String, Object>> existentes) {
-        LocalTime inicio = LocalTime.parse(horaInicioStr, TIME_FMT);
-        LocalTime fin    = LocalTime.parse(horaFinStr,    TIME_FMT);
-
-        List<Map<String, Object>> superpuestos = existentes.stream()
-                .filter(r -> r.get("horaInicio") != null && r.get("horaFin") != null)
-                .filter(r -> {
-                    LocalTime rS = LocalTime.parse(r.get("horaInicio").toString(), TIME_PARSE);
-                    LocalTime rE = LocalTime.parse(r.get("horaFin").toString(),    TIME_PARSE);
-                    return rS.isBefore(fin) && rE.isAfter(inicio);
-                })
-                .collect(Collectors.toList());
-
-        if (superpuestos.isEmpty()) return false;
-
-        // Solo es ACT si TODOS los registros superpuestos carecen de proyecto
-        return superpuestos.stream().allMatch(r -> r.get("idProyecto") == null);
-    }
-
-    private List<String[]> calcularFranjas(String horaInicioStr, String horaFinStr,
-                                            List<Map<String, Object>> existentes) {
-        LocalTime inicio = LocalTime.parse(horaInicioStr, TIME_FMT);
-        LocalTime fin    = LocalTime.parse(horaFinStr,    TIME_FMT);
-
-        List<LocalTime[]> ocupados = existentes.stream()
-                .filter(r -> r.get("horaInicio") != null && r.get("horaFin") != null)
-                .map(r -> new LocalTime[]{
-                        LocalTime.parse(r.get("horaInicio").toString(), TIME_PARSE),
-                        LocalTime.parse(r.get("horaFin").toString(),    TIME_PARSE)
-                })
-                .filter(o -> o[0].isBefore(fin) && o[1].isAfter(inicio)) // solo los que se traslapen
-                .sorted(Comparator.comparing(o -> o[0]))
-                .collect(Collectors.toList());
-
-        if (ocupados.isEmpty()) {
-            return Collections.singletonList(new String[]{horaInicioStr, horaFinStr});
-        }
-
-        List<String[]> franjas = new ArrayList<>();
-        LocalTime cursor = inicio;
-
-        for (LocalTime[] ocupado : ocupados) {
-            if (ocupado[0].isAfter(cursor)) {
-                franjas.add(new String[]{cursor.format(TIME_FMT), ocupado[0].format(TIME_FMT)});
-            }
-            if (ocupado[1].isAfter(cursor)) {
-                cursor = ocupado[1];
-            }
-            if (!cursor.isBefore(fin)) break;
-        }
-
-        if (cursor.isBefore(fin)) {
-            franjas.add(new String[]{cursor.format(TIME_FMT), fin.format(TIME_FMT)});
-        }
-
-        return franjas;
     }
 
     // ─── Mover registros superpuestos para dar espacio al nuevo ─────────────
