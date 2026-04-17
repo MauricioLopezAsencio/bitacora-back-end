@@ -119,16 +119,17 @@ private final ICalendarioService calendarioService;
                 .toList();
 
         if (NA.equals(idProyecto)) {
-            // Sesiones: recorrer/partir usando solo registros de tipo sesión en Scoca
-            List<String[]> franjas = calcularFranjasLibres(horaInicio, horaFin, sesionesDia);
-            if (franjas.isEmpty()) {
-                log.debug("Sesión completamente ocupada en Scoca, se omite subject='{}' fecha={} horario={}-{}",
+            // Sesiones: ocultar solo si Scoca tiene exactamente el mismo horario registrado (cualquier tipo).
+            // Un bloque mayor (ej. 9:20-17:00) NO oculta sesiones menores contenidas (ej. 12:00-12:30).
+            boolean yaRegistradaExacta = registrosDelDia.stream()
+                    .anyMatch(r -> horaCoincide(horaInicio, r.get("horaInicio"))
+                               && horaCoincide(horaFin,    r.get("horaFin")));
+            if (yaRegistradaExacta) {
+                log.debug("Sesión ya registrada exactamente en Scoca, se omite subject='{}' fecha={} horario={}-{}",
                         evento.getSubject(), fecha, horaInicio, horaFin);
                 return Collections.emptyList();
             }
-            return franjas.stream()
-                    .map(f -> buildActividadDto(idEmpleado, evento, idProyecto, fecha, f[0], f[1]))
-                    .toList();
+            return List.of(buildActividadDto(idEmpleado, evento, idProyecto, fecha, horaInicio, horaFin));
         }
 
         // Actividades con proyecto: cualquier registro en Scoca (sesión u otro tipo) bloquea el horario
@@ -200,6 +201,13 @@ private final ICalendarioService calendarioService;
                 .horaInicio(horaInicio)
                 .horaFin(horaFin)
                 .build();
+    }
+
+    private boolean horaCoincide(String horaCalendario, Object horaScoca) {
+        if (horaScoca == null) return false;
+        String scoca = normalizarHora(horaScoca);
+        String cal   = horaCalendario.length() > 5 ? horaCalendario.substring(0, 5) : horaCalendario;
+        return cal.equals(scoca);
     }
 
     private LocalTime parsearHora(String hora) {
