@@ -23,7 +23,6 @@ public class RegistrarActividadRequest {
     @NotNull(message = "idTipoActividad es requerido")
     private Integer idTipoActividad;
 
-    @NotNull(message = "idProyecto es requerido")
     private Long idProyecto;
 
     @NotBlank(message = "descripcion es requerida")

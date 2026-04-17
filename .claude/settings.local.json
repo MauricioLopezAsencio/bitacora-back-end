@@ -19,7 +19,10 @@
       "WebFetch(domain:scoca.casystem.com.mx)",
       "Bash(curl -s -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpZFJvbCI6Niwic2lkIjoiNWFjMDg1OGUtYzc2ZC00YmZhLWI3OWItMGMzNDExMjM4ZjhmIiwic3ViIjoibWxvcGV6IiwiaWF0IjoxNzc1MTYzNjEzLCJleHAiOjE3NzUxNjQ1MTN9.m3Mfz_ye3p8PKmEiUTEGQQ4gt47Vdz3Oj3fYYbq_XUY\" \"https://scoca.casystem.com.mx/api/bitacora/proyectos/byEmpleado/6440\")",
       "Bash(curl:*)",
-      "Bash(grep -E \"\\\\.\\(java|sql\\)$\")"
+      "Bash(grep -E \"\\\\.\\(java|sql\\)$\")",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\"; cd \"C:\\\\Users\\\\mlopez\\\\IdeaProjects\\\\personal\\\\bt-backend\"; .\\\\mvnw compile -q 2>&1 | Select-Object -Last 15)",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\"; cd \"C:\\\\Users\\\\mlopez\\\\IdeaProjects\\\\personal\\\\bt-backend\"; .\\\\mvnw compile -q 2>&1 | Select-Object -Last 10)",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\"; cd \"C:\\\\Users\\\\mlopez\\\\IdeaProjects\\\\personal\\\\bt-backend\"; .\\\\mvnw compile -q 2>&1 | Select-Object -Last 5)"
     ]
   }
 }

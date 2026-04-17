@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalTime;
@@ -128,14 +129,22 @@ public class BitacoraService implements IBitacoraService {
         List<Map<String, Object>> existentes = obtenerRegistrosExistentes(
                 idEmpleado, request.getFechaRegistro().toString(), token, request);
 
+        // Sesión sin proyecto → ocupa el horario completo partiendo lo que haya
+        if (request.getIdProyecto() == null) {
+            log.info("Sesión sin proyecto, split directo idEmpleado={} fecha={} horario={}-{}",
+                    idEmpleado, request.getFechaRegistro(),
+                    request.getHoraInicio(), request.getHoraFin());
+            return registrarConSeparacion(request, idEmpleado, token, existentes);
+        }
+
         List<String[]> franjas = calcularFranjas(
                 request.getHoraInicio(), request.getHoraFin(), existentes);
 
         if (franjas.isEmpty()) {
-            log.warn("Sin franjas disponibles para registrar idEmpleado={} fecha={} horario={}-{}",
+            log.info("Slot cubierto, iniciando partición de registros existentes idEmpleado={} fecha={} horario={}-{}",
                     idEmpleado, request.getFechaRegistro(),
                     request.getHoraInicio(), request.getHoraFin());
-            return Collections.emptyList();
+            return registrarConSeparacion(request, idEmpleado, token, existentes);
         }
 
         log.info("Registrando {} franja(s) para idEmpleado={} fecha={}",
@@ -233,6 +242,27 @@ public class BitacoraService implements IBitacoraService {
         return calcularFranjas(horaInicioStr, horaFinStr, existentes);
     }
 
+    @Override
+    public boolean estaCubiertoPorActSinProyecto(String horaInicioStr, String horaFinStr,
+                                                   List<Map<String, Object>> existentes) {
+        LocalTime inicio = LocalTime.parse(horaInicioStr, TIME_FMT);
+        LocalTime fin    = LocalTime.parse(horaFinStr,    TIME_FMT);
+
+        List<Map<String, Object>> superpuestos = existentes.stream()
+                .filter(r -> r.get("horaInicio") != null && r.get("horaFin") != null)
+                .filter(r -> {
+                    LocalTime rS = LocalTime.parse(r.get("horaInicio").toString(), TIME_PARSE);
+                    LocalTime rE = LocalTime.parse(r.get("horaFin").toString(),    TIME_PARSE);
+                    return rS.isBefore(fin) && rE.isAfter(inicio);
+                })
+                .collect(Collectors.toList());
+
+        if (superpuestos.isEmpty()) return false;
+
+        // Solo es ACT si TODOS los registros superpuestos carecen de proyecto
+        return superpuestos.stream().allMatch(r -> r.get("idProyecto") == null);
+    }
+
     private List<String[]> calcularFranjas(String horaInicioStr, String horaFinStr,
                                             List<Map<String, Object>> existentes) {
         LocalTime inicio = LocalTime.parse(horaInicioStr, TIME_FMT);
@@ -270,6 +300,116 @@ public class BitacoraService implements IBitacoraService {
         }
 
         return franjas;
+    }
+
+    // ─── Mover registros superpuestos para dar espacio al nuevo ─────────────
+
+    /**
+     * Para cada registro de Scoca que se traslape con [newStart, newEnd]:
+     *   - Si el registro termina después de newEnd → moverlo para que empiece en newEnd
+     *   - Si el registro termina antes o en newEnd  → no hace falta editarlo (queda dentro)
+     * Luego registra la nueva actividad en [newStart, newEnd].
+     */
+    private List<Object> registrarConSeparacion(RegistrarActividadRequest request,
+                                                 Long idEmpleado, String token,
+                                                 List<Map<String, Object>> existentes) {
+        LocalTime newStart = LocalTime.parse(request.getHoraInicio(), TIME_FMT);
+        LocalTime newEnd   = LocalTime.parse(request.getHoraFin(),    TIME_FMT);
+
+        List<Map<String, Object>> superpuestos = existentes.stream()
+                .filter(r -> r.get("horaInicio") != null && r.get("horaFin") != null && r.get("id") != null)
+                .filter(r -> {
+                    LocalTime rS = LocalTime.parse(r.get("horaInicio").toString(), TIME_PARSE);
+                    LocalTime rE = LocalTime.parse(r.get("horaFin").toString(),    TIME_PARSE);
+                    return rS.isBefore(newEnd) && rE.isAfter(newStart);
+                })
+                .collect(Collectors.toList());
+
+        log.info("Registros superpuestos encontrados: {} para horario={}-{}",
+                superpuestos.size(), request.getHoraInicio(), request.getHoraFin());
+
+        List<Object> resultados = new ArrayList<>();
+
+        for (Map<String, Object> reg : superpuestos) {
+            Long      idReg = ((Number) reg.get("id")).longValue();
+            LocalTime rE    = LocalTime.parse(reg.get("horaFin").toString(), TIME_PARSE);
+
+            if (rE.isAfter(newEnd)) {
+                // El registro termina después del nuevo → moverlo para que empiece en newEnd
+                log.info("Moviendo registro id={} para que empiece en {}", idReg, newEnd.format(TIME_FMT));
+                resultados.add(actualizarRegistro(idReg,
+                        buildUpdateBody(reg, idEmpleado, newEnd.format(TIME_FMT), rE.format(TIME_FMT)),
+                        token, request));
+            } else {
+                // El registro queda completamente dentro del nuevo intervalo — no se edita
+                log.info("Registro id={} queda dentro del nuevo intervalo, se omite edición", idReg);
+            }
+        }
+
+        resultados.add(ejecutarRegistroConHorario(request, idEmpleado, token,
+                request.getHoraInicio(), request.getHoraFin()));
+
+        log.info("Separación completada: {} operación(es) idEmpleado={} fecha={} horario={}-{}",
+                resultados.size(), idEmpleado, request.getFechaRegistro(),
+                request.getHoraInicio(), request.getHoraFin());
+
+        return resultados;
+    }
+
+    private Object actualizarRegistro(Long idRegistro, Map<String, Object> body,
+                                       String token, RegistrarActividadRequest request) {
+        try {
+            return doActualizarRegistro(idRegistro, body, token);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                log.warn("Token expirado al actualizar registro id={}, renovando...", idRegistro);
+                return doActualizarRegistro(idRegistro, body,
+                        tokenManager.renovarToken(request.getUsername(), request.getPassword()));
+            }
+            log.error("Error 4xx al actualizar registro id={} body={} response={}",
+                    idRegistro, body, ex.getResponseBodyAsString());
+            throw ex;
+        } catch (HttpServerErrorException ex) {
+            log.error("Error 5xx al actualizar registro id={} body={} response={}",
+                    idRegistro, body, ex.getResponseBodyAsString());
+            throw ex;
+        }
+    }
+
+    private Object doActualizarRegistro(Long idRegistro, Map<String, Object> body, String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> bodyConId = new LinkedHashMap<>(body);
+        bodyConId.put("id", idRegistro);
+
+        log.info("PUT {} id={} horaInicio={} horaFin={}",
+                REGISTRAR_ACTIVIDAD_URL, idRegistro, body.get("horaInicio"), body.get("horaFin"));
+
+        ResponseEntity<Object> response = restTemplate.exchange(
+                REGISTRAR_ACTIVIDAD_URL, HttpMethod.PUT,
+                new HttpEntity<>(bodyConId, headers), Object.class);
+
+        log.info("Registro actualizado id={}", idRegistro);
+        return response.getBody();
+    }
+
+    private Map<String, Object> buildUpdateBody(Map<String, Object> reg, Long idEmpleado,
+                                                 String horaInicio, String horaFin) {
+        log.info("Campos del registro existente en Scoca: {}", reg.keySet());
+        log.info("Valores del registro existente: {}", reg);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("idEmpleado",      idEmpleado);
+        body.put("idActividad",     reg.get("idActividad"));
+        body.put("idTipoActividad", reg.get("idTipoActividad"));
+        body.put("idProyecto",      reg.get("idProyecto"));
+        body.put("descripcion",     reg.get("descripcion"));
+        body.put("fechaRegistro",   reg.get("fechaRegistro"));
+        body.put("horaInicio",      horaInicio);
+        body.put("horaFin",         horaFin);
+        return body;
     }
 
     private Object ejecutarRegistro(RegistrarActividadRequest request, Long idEmpleado, String token) {
