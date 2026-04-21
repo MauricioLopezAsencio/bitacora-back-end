@@ -22,7 +22,15 @@
       "Bash(grep -E \"\\\\.\\(java|sql\\)$\")",
       "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\"; cd \"C:\\\\Users\\\\mlopez\\\\IdeaProjects\\\\personal\\\\bt-backend\"; .\\\\mvnw compile -q 2>&1 | Select-Object -Last 15)",
       "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\"; cd \"C:\\\\Users\\\\mlopez\\\\IdeaProjects\\\\personal\\\\bt-backend\"; .\\\\mvnw compile -q 2>&1 | Select-Object -Last 10)",
-      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\"; cd \"C:\\\\Users\\\\mlopez\\\\IdeaProjects\\\\personal\\\\bt-backend\"; .\\\\mvnw compile -q 2>&1 | Select-Object -Last 5)"
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\"; cd \"C:\\\\Users\\\\mlopez\\\\IdeaProjects\\\\personal\\\\bt-backend\"; .\\\\mvnw compile -q 2>&1 | Select-Object -Last 5)",
+      "Bash(mvn compile *)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Eclipse Adoptium/jdk-17.0.14.7-hotspot\" ./mvnw compile -q)",
+      "Bash(JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-21.0.10.7-hotspot\" ./mvnw compile -q)",
+      "Bash(mvn clean *)",
+      "Bash(./mvnw clean *)",
+      "Bash(JAVA_HOME=\"/mnt/c/Program Files/Eclipse Adoptium/jdk-17.0.14.7-hotspot\" ./mvnw clean package -DskipTests -q)",
+      "Bash(java -version)",
+      "Bash(JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-17.0.18.8-hotspot\" ./mvnw clean package -DskipTests -q)"
     ]
   }
 }

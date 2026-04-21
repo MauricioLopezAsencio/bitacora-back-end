@@ -18,17 +18,22 @@ public class DataInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        crearUsuarioSiNoExiste("admin", "admin123", "Administrador");
+        crearUsuarioSiNoExiste("mlopez", "Mau.Uchiha57", "Mauricio Lopez");
+    }
+
+    private void crearUsuarioSiNoExiste(String usuario, String password, String nombre) {
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM ct_usuarios WHERE cv_usuario = 'admin'", Integer.class);
+                "SELECT COUNT(*) FROM ct_usuarios WHERE cv_usuario = ?", Integer.class, usuario);
         if (count != null && count == 0) {
             jdbcTemplate.update(
                     "INSERT INTO ct_usuarios (cv_usuario, ds_password, ds_nombre, bo_activo) VALUES (?, ?, ?, ?)",
-                    "admin",
-                    passwordEncoder.encode("admin123"),
-                    "Administrador",
+                    usuario,
+                    passwordEncoder.encode(password),
+                    nombre,
                     true
             );
-            log.info("Usuario admin creado con password por defecto");
+            log.info("Usuario {} creado", usuario);
         }
     }
 }
