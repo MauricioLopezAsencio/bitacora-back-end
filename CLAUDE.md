@@ -87,7 +87,7 @@ No local persistence. `BitacoraTokenManager` caches Bearer tokens per username (
 
 **Display filtering rules in `ActividadService.expandirEnFranjas()`:**
 - **Actividades (with project):** `calcularFranjasLibres()` is used with ALL Scoca registrations for that day — if a slot is fully covered by any existing registration, it is hidden. Partial overlaps are split and shown.
-- **Sesiones (NA):** hidden only if Scoca has an **exact** time-range match (`horaInicio` AND `horaFin` both equal). A large covering block (e.g., 9:20–17:00 in Scoca) does NOT hide a smaller session (e.g., 12:00–12:30) — it must be an exact match.
+- **Sesiones (NA):** `calcularFranjasLibres()` is also used with ALL Scoca registrations for that day — the session's `horaInicio`/`horaFin` are replaced by the free sub-slots that remain. If the entire slot is covered, the session is hidden. Partial overlaps produce multiple split sessions, each guaranteed not to overlap with any existing Scoca entry.
 - `ID_SESION_INTERNA = 1`, `ID_SESION_EXTERNA = 2`, `ID_TIPO_ACTIVIDAD = 3` are hardcoded constants that must match the Scoca catalog. If the catalog changes, update these constants in `ActividadService`.
 
 `BitacoraService.registrarActividadConParticion()` handles overlap-safe registration:

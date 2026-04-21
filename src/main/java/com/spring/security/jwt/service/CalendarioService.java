@@ -53,8 +53,15 @@ public class CalendarioService implements ICalendarioService {
         headers.setBearerAuth(bearerToken);
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        String startIso = desde.atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        String endIso   = hasta.atTime(23, 59, 59).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        // Anclar a medianoche Mexico City con offset explícito (-06:00 / -05:00 según DST).
+        // Sin offset, Graph interpreta la hora como UTC y devuelve eventos del día anterior.
+        String startIso = desde.atStartOfDay(ZONA_MEXICO)
+                .toOffsetDateTime()
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String endIso   = hasta.atTime(23, 59, 59)
+                .atZone(ZONA_MEXICO)
+                .toOffsetDateTime()
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         String url      = String.format(GRAPH_CALENDAR_VIEW_URL, startIso, endIso);
 
         try {
@@ -80,9 +87,12 @@ public class CalendarioService implements ICalendarioService {
 
             return todos.stream()
                     .filter(e -> !"seriesMaster".equalsIgnoreCase(e.getType()))
-                    .filter(e -> !feriadosService.esFeriado(
-                            LocalDate.parse(e.getStart().getDateTime().substring(0, 10))))
                     .map(this::toDto)
+                    // Filtrar feriados usando la fecha ya convertida a Mexico City (dd/MM/yyyy HH:mm)
+                    // para no depender de la fecha UTC cruda que devuelve Graph.
+                    .filter(dto -> !feriadosService.esFeriado(
+                            LocalDate.parse(dto.getStart().substring(0, 10),
+                                    DateTimeFormatter.ofPattern("dd/MM/yyyy"))))
                     .toList();
 
         } catch (HttpClientErrorException ex) {

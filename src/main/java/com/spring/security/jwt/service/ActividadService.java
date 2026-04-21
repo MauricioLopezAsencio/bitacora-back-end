@@ -109,34 +109,12 @@ private final ICalendarioService calendarioService;
         Object idProyecto = findProyecto(evento.getSubject(), proyectos);
         List<Map<String, Object>> registrosDelDia = registrosPorFecha.getOrDefault(fecha, Collections.emptyList());
 
-        List<Map<String, Object>> sesionesDia = registrosDelDia.stream()
-                .filter(r -> {
-                    Object idAct = r.get("idActividad");
-                    if (idAct == null) return false;
-                    long id = ((Number) idAct).longValue();
-                    return id == ID_SESION_INTERNA || id == ID_SESION_EXTERNA;
-                })
-                .toList();
-
-        if (NA.equals(idProyecto)) {
-            // Sesiones: ocultar solo si Scoca tiene exactamente el mismo horario registrado (cualquier tipo).
-            // Un bloque mayor (ej. 9:20-17:00) NO oculta sesiones menores contenidas (ej. 12:00-12:30).
-            boolean yaRegistradaExacta = registrosDelDia.stream()
-                    .anyMatch(r -> horaCoincide(horaInicio, r.get("horaInicio"))
-                               && horaCoincide(horaFin,    r.get("horaFin")));
-            if (yaRegistradaExacta) {
-                log.debug("Sesión ya registrada exactamente en Scoca, se omite subject='{}' fecha={} horario={}-{}",
-                        evento.getSubject(), fecha, horaInicio, horaFin);
-                return Collections.emptyList();
-            }
-            return List.of(buildActividadDto(idEmpleado, evento, idProyecto, fecha, horaInicio, horaFin));
-        }
-
-        // Actividades con proyecto: cualquier registro en Scoca (sesión u otro tipo) bloquea el horario
+        // Tanto sesiones (NA) como actividades con proyecto usan los horarios libres reales de Scoca.
+        // Si el slot queda completamente cubierto, se omite; los solapamientos parciales generan splits.
         List<String[]> franjas = calcularFranjasLibres(horaInicio, horaFin, registrosDelDia);
 
         if (franjas.isEmpty()) {
-            log.debug("Actividad ya registrada en Scoca, se omite subject='{}' fecha={} horario={}-{}",
+            log.debug("Evento completamente cubierto en Scoca, se omite subject='{}' fecha={} horario={}-{}",
                     evento.getSubject(), fecha, horaInicio, horaFin);
             return Collections.emptyList();
         }
@@ -160,7 +138,9 @@ private final ICalendarioService calendarioService;
                         parsearHora(normalizarHora(r.get("horaFin")))
                 })
                 .filter(o -> o[0] != null && o[1] != null)
-                .filter(o -> o[0].isBefore(fin) && o[1].isAfter(inicio))
+                // >= en el extremo derecho: bloques que terminan exactamente en horaInicio del evento
+                // también se incluyen, garantizando que el cursor los "vea" y no arranque en su borde.
+                .filter(o -> o[0].isBefore(fin) && !o[1].isBefore(inicio))
                 .sorted(java.util.Comparator.comparing(o -> o[0]))
                 .toList();
 
@@ -175,7 +155,9 @@ private final ICalendarioService calendarioService;
             if (ocupado[0].isAfter(cursor)) {
                 franjas.add(new String[]{cursor.format(TIME_FMT), ocupado[0].format(TIME_FMT)});
             }
-            if (ocupado[1].isAfter(cursor)) {
+            // >= en avance de cursor: si un bloque termina exactamente donde está cursor,
+            // se recorre al siguiente punto disponible (evita que horaInicio choque con horaFin de Scoca).
+            if (!ocupado[1].isBefore(cursor)) {
                 cursor = ocupado[1];
             }
             if (!cursor.isBefore(fin)) break;
@@ -201,13 +183,6 @@ private final ICalendarioService calendarioService;
                 .horaInicio(horaInicio)
                 .horaFin(horaFin)
                 .build();
-    }
-
-    private boolean horaCoincide(String horaCalendario, Object horaScoca) {
-        if (horaScoca == null) return false;
-        String scoca = normalizarHora(horaScoca);
-        String cal   = horaCalendario.length() > 5 ? horaCalendario.substring(0, 5) : horaCalendario;
-        return cal.equals(scoca);
     }
 
     private LocalTime parsearHora(String hora) {
