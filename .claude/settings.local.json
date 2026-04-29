@@ -30,7 +30,14 @@
       "Bash(./mvnw clean *)",
       "Bash(JAVA_HOME=\"/mnt/c/Program Files/Eclipse Adoptium/jdk-17.0.14.7-hotspot\" ./mvnw clean package -DskipTests -q)",
       "Bash(java -version)",
-      "Bash(JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-17.0.18.8-hotspot\" ./mvnw clean package -DskipTests -q)"
+      "Bash(JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-17.0.18.8-hotspot\" ./mvnw clean package -DskipTests -q)",
+      "Read(//c/Program Files/**)",
+      "Read(//c//**)",
+      "Read(//c/Users/mlopez/.m2/**)",
+      "Bash(./mvnw -q -DskipTests compile)",
+      "Bash(export JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-17.0.18.8-hotspot\")",
+      "Bash(./mvnw -DskipTests compile)",
+      "Bash(./mvnw test *)"
     ]
   }
 }

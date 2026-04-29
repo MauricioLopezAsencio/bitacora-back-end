@@ -36,4 +36,10 @@ public class RegistrarActividadRequest {
 
     @NotBlank(message = "horaFin es requerida")
     private String horaFin;
+
+    /**
+     * Código de fase ({@link Fase}). Solo se envía a Scoca cuando el tipo de
+     * actividad seleccionado es "Servicio". En los demás tipos se ignora.
+     */
+    private String fase;
 }

@@ -15,4 +15,5 @@ public class ActividadDto {
     private String fechaRegistro;   // yyyy-MM-dd
     private String horaInicio;      // HH:mm
     private String horaFin;         // HH:mm
+    private String fase;            // código de Fase, solo cuando idTipoActividad = Servicio
 }

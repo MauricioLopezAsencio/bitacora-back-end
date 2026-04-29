@@ -4,8 +4,11 @@ import com.spring.security.jwt.dto.ActividadDto;
 import com.spring.security.jwt.dto.ActividadRequest;
 import com.spring.security.jwt.dto.ActividadResultDto;
 import com.spring.security.jwt.dto.ApiResponse;
+import com.spring.security.jwt.dto.Fase;
+import com.spring.security.jwt.dto.FaseDto;
 import com.spring.security.jwt.dto.WorkItemDto;
 import com.spring.security.jwt.service.IActividadService;
+import com.spring.security.jwt.service.MapeoTipoActividadFase;
 import com.spring.security.jwt.service.WorkItemCsvService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -16,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/actividades")
@@ -23,13 +28,33 @@ import java.util.List;
 @Slf4j
 public class ActividadController {
 
-    private final IActividadService  actividadService;
-    private final WorkItemCsvService workItemCsvService;
+    private final IActividadService        actividadService;
+    private final WorkItemCsvService       workItemCsvService;
+    private final MapeoTipoActividadFase   mapeoFase;
 
     public ActividadController(IActividadService actividadService,
-                               WorkItemCsvService workItemCsvService) {
-        this.actividadService  = actividadService;
+                               WorkItemCsvService workItemCsvService,
+                               MapeoTipoActividadFase mapeoFase) {
+        this.actividadService   = actividadService;
         this.workItemCsvService = workItemCsvService;
+        this.mapeoFase          = mapeoFase;
+    }
+
+    @GetMapping("/fases")
+    public ResponseEntity<ApiResponse<List<FaseDto>>> obtenerFases(HttpServletRequest servletRequest) {
+        List<FaseDto> data = Fase.ordenadas().stream()
+                .map(FaseDto::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.ok(data, "Fases obtenidas exitosamente")
+                .toBuilder().path(servletRequest.getRequestURI()).build());
+    }
+
+    @GetMapping("/fases/mapeo")
+    public ResponseEntity<ApiResponse<Map<String, String>>> obtenerMapeoFase(HttpServletRequest servletRequest) {
+        Map<String, String> data = mapeoFase.obtenerMapeo().entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getCodigo()));
+        return ResponseEntity.ok(ApiResponse.ok(data, "Mapeo actividad → fase obtenido exitosamente")
+                .toBuilder().path(servletRequest.getRequestURI()).build());
     }
 
     @PostMapping

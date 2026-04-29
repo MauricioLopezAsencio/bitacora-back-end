@@ -20,6 +20,7 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         crearUsuarioSiNoExiste("admin", "admin123", "Administrador");
         crearUsuarioSiNoExiste("mlopez", "Mau.Uchiha57", "Mauricio Lopez");
+        crearUsuarioSiNoExiste("mmendoza", "Mirhell3010.", "Mirhell Mendoza");
     }
 
     private void crearUsuarioSiNoExiste(String usuario, String password, String nombre) {

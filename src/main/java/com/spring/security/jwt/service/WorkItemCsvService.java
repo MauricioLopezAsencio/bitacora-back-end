@@ -3,8 +3,10 @@ package com.spring.security.jwt.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.security.jwt.dto.ActividadDto;
+import com.spring.security.jwt.dto.Fase;
 import com.spring.security.jwt.dto.WorkItemDto;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -46,12 +48,19 @@ public class WorkItemCsvService {
     private static final int COL_ITERATION = 4;
     private static final int COL_MINUTOS   = 5;
 
-    private final IBitacoraService bitacoraService;
-    private final ObjectMapper     objectMapper;
+    private final IBitacoraService       bitacoraService;
+    private final ObjectMapper           objectMapper;
+    private final MapeoTipoActividadFase mapeoFase;
 
-    public WorkItemCsvService(IBitacoraService bitacoraService, ObjectMapper objectMapper) {
+    @Value("${app.bitacora.tipo-actividad-servicio-id:4}")
+    private int idTipoActividadServicio;
+
+    public WorkItemCsvService(IBitacoraService bitacoraService,
+                              ObjectMapper objectMapper,
+                              MapeoTipoActividadFase mapeoFase) {
         this.bitacoraService = bitacoraService;
         this.objectMapper    = objectMapper;
+        this.mapeoFase       = mapeoFase;
     }
 
     // ── Parseo puro del CSV ───────────────────────────────────────────────────
@@ -134,6 +143,7 @@ public class WorkItemCsvService {
             }
 
             Object idProyecto = matchProyecto(item.getIterationPath(), proyectos);
+            String faseCodigo = resolverFase(idTipoServicio, "Desarrollo");
 
             resultado.add(ActividadDto.builder()
                     .idEmpleado(idEmpleado)
@@ -144,6 +154,7 @@ public class WorkItemCsvService {
                     .fechaRegistro(fechaActual.toString())
                     .horaInicio(slot[0].format(TIME_FMT))
                     .horaFin(slot[1].format(TIME_FMT))
+                    .fase(faseCodigo)
                     .build());
 
             ocupados.add(slot);
@@ -153,6 +164,16 @@ public class WorkItemCsvService {
         log.info("Work items preparados: {}/{} idEmpleado={} idTipo={} idActividad={}",
                 resultado.size(), conMinutos.size(), idEmpleado, idTipoServicio, idDesarrollo);
         return resultado;
+    }
+
+    // ── Resolución de fase según mapeo ────────────────────────────────────────
+
+    private String resolverFase(Integer idTipoActividad, String nombreActividad) {
+        if (idTipoActividad == null || idTipoActividad != idTipoActividadServicio) {
+            return null;
+        }
+        Fase fase = mapeoFase.resolver(nombreActividad);
+        return fase != null ? fase.getCodigo() : null;
     }
 
     // ── Resolución dinámica de catálogo Scoca ─────────────────────────────────

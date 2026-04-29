@@ -1,7 +1,9 @@
 package com.spring.security.jwt.service;
 
 import com.spring.security.jwt.dto.RegistrarActividadRequest;
+import com.spring.security.jwt.exception.NegocioException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -47,6 +49,9 @@ public class BitacoraService implements IBitacoraService {
     private final RestTemplate restTemplate;
     private final BitacoraTokenManager tokenManager;
 
+    @Value("${app.bitacora.tipo-actividad-servicio-id:4}")
+    private int idTipoActividadServicio;
+
     public BitacoraService(RestTemplate restTemplate, BitacoraTokenManager tokenManager) {
         this.restTemplate = restTemplate;
         this.tokenManager = tokenManager;
@@ -73,6 +78,8 @@ public class BitacoraService implements IBitacoraService {
 
     @Override
     public Object registrarActividad(RegistrarActividadRequest request) {
+        validarFaseSiAplica(request);
+
         Long idEmpleado = tokenManager.obtenerIdEmpleado(request.getUsername(), request.getPassword());
         String token    = tokenManager.obtenerToken(request.getUsername(), request.getPassword());
         try {
@@ -122,6 +129,8 @@ public class BitacoraService implements IBitacoraService {
 
     @Override
     public List<Object> registrarActividadConParticion(RegistrarActividadRequest request) {
+        validarFaseSiAplica(request);
+
         Long idEmpleado = tokenManager.obtenerIdEmpleado(request.getUsername(), request.getPassword());
         String token    = tokenManager.obtenerToken(request.getUsername(), request.getPassword());
 
@@ -129,6 +138,24 @@ public class BitacoraService implements IBitacoraService {
                 idEmpleado, request.getFechaRegistro().toString(), token, request);
 
         return registrarConSeparacion(request, idEmpleado, token, existentes);
+    }
+
+    private void validarFaseSiAplica(RegistrarActividadRequest request) {
+        if (request.getIdTipoActividad() != null
+                && request.getIdTipoActividad() == idTipoActividadServicio
+                && (request.getFase() == null || request.getFase().isBlank())) {
+            throw new NegocioException("El campo 'fase' es obligatorio cuando el tipo de actividad es Servicio");
+        }
+    }
+
+    private boolean esTipoServicio(Object idTipoActividad) {
+        if (idTipoActividad == null) return false;
+        if (idTipoActividad instanceof Number n) return n.intValue() == idTipoActividadServicio;
+        try {
+            return Integer.parseInt(idTipoActividad.toString()) == idTipoActividadServicio;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
     }
 
     // ─── Consulta de registros existentes ───────────────────────────────────
@@ -180,12 +207,26 @@ public class BitacoraService implements IBitacoraService {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> parsearListaDeRegistros(Object raw) {
         if (raw == null) return Collections.emptyList();
-        if (raw instanceof List<?> list) return (List<Map<String, Object>>) list;
-        if (raw instanceof Map<?, ?> map) {
-            Object data = map.get("data");
-            if (data instanceof List<?> list) return (List<Map<String, Object>>) list;
+        List<Map<String, Object>> registros;
+        if (raw instanceof List<?> list) {
+            registros = (List<Map<String, Object>>) list;
+        } else if (raw instanceof Map<?, ?> map && map.get("data") instanceof List<?> list) {
+            registros = (List<Map<String, Object>>) list;
+        } else {
+            return Collections.emptyList();
         }
-        return Collections.emptyList();
+        registros.forEach(this::normalizarFase);
+        return registros;
+    }
+
+    /**
+     * Garantiza que cada registro expuesto al frontend incluya la clave "fase".
+     * Si Scoca todavía no devuelve este campo, se publica como null para que el
+     * contrato JSON sea estable independiente del backend remoto.
+     */
+    private void normalizarFase(Map<String, Object> registro) {
+        if (registro == null) return;
+        if (!registro.containsKey("fase")) registro.put("fase", null);
     }
 
     // ─── Mover registros superpuestos para dar espacio al nuevo ─────────────
@@ -287,6 +328,9 @@ public class BitacoraService implements IBitacoraService {
         body.put("fechaRegistro",   reg.get("fechaRegistro"));
         body.put("horaInicio",      horaInicio);
         body.put("horaFin",         horaFin);
+        if (esTipoServicio(reg.get("idTipoActividad")) && reg.get("fase") != null) {
+            body.put("fase", reg.get("fase"));
+        }
 
         log.info("POST {} (parte anterior del existente) horaInicio={} horaFin={}",
                 REGISTRAR_ACTIVIDAD_URL, horaInicio, horaFin);
@@ -360,6 +404,9 @@ public class BitacoraService implements IBitacoraService {
         body.put("fechaRegistro",   reg.get("fechaRegistro"));
         body.put("horaInicio",      horaInicio);
         body.put("horaFin",         horaFin);
+        if (esTipoServicio(reg.get("idTipoActividad")) && reg.get("fase") != null) {
+            body.put("fase", reg.get("fase"));
+        }
         return body;
     }
 
@@ -377,6 +424,7 @@ public class BitacoraService implements IBitacoraService {
         body.put("fechaRegistro",   request.getFechaRegistro().toString());
         body.put("horaInicio",      request.getHoraInicio());
         body.put("horaFin",         request.getHoraFin());
+        agregarFaseSiAplica(body, request);
 
         ResponseEntity<Object> response = restTemplate.postForEntity(
                 REGISTRAR_ACTIVIDAD_URL, new HttpEntity<>(body, headers), Object.class);
@@ -400,12 +448,22 @@ public class BitacoraService implements IBitacoraService {
         body.put("fechaRegistro",   request.getFechaRegistro().toString());
         body.put("horaInicio",      horaInicio);
         body.put("horaFin",         horaFin);
+        body.put("fase", request.getFase());
+        agregarFaseSiAplica(body, request);
 
         ResponseEntity<Object> response = restTemplate.postForEntity(
                 REGISTRAR_ACTIVIDAD_URL, new HttpEntity<>(body, headers), Object.class);
         log.info("Franja registrada idEmpleado={} idProyecto={} horario={}-{}",
                 idEmpleado, request.getIdProyecto(), horaInicio, horaFin);
         return response.getBody();
+    }
+
+    private void agregarFaseSiAplica(Map<String, Object> body, RegistrarActividadRequest request) {
+        if (esTipoServicio(request.getIdTipoActividad())
+                && request.getFase() != null
+                && !request.getFase().isBlank()) {
+            body.put("fase", request.getFase());
+        }
     }
 
     private Object ejecutarConsulta(Long idEmpleado, String token) {

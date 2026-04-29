@@ -6,9 +6,12 @@ import com.spring.security.jwt.dto.ActividadDto;
 import com.spring.security.jwt.dto.ActividadRequest;
 import com.spring.security.jwt.dto.ActividadResultDto;
 import com.spring.security.jwt.dto.CalendarioEventoDto;
+import com.spring.security.jwt.dto.Fase;
+import com.spring.security.jwt.dto.FaseDto;
 import com.spring.security.jwt.dto.ProyectoDto;
 import com.spring.security.jwt.exception.TokenExpiradoException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 
@@ -35,16 +38,22 @@ public class ActividadService implements IActividadService {
     private static final int  ID_TIPO_ACTIVIDAD  = 3;
     private static final String NA               = "N/A";
 
-private final ICalendarioService calendarioService;
-    private final IBitacoraService   bitacoraService;
-    private final ObjectMapper       objectMapper;
+    private final ICalendarioService     calendarioService;
+    private final IBitacoraService       bitacoraService;
+    private final ObjectMapper           objectMapper;
+    private final MapeoTipoActividadFase mapeoFase;
+
+    @Value("${app.bitacora.tipo-actividad-servicio-id:4}")
+    private int idTipoActividadServicio;
 
     public ActividadService(ICalendarioService calendarioService,
                             IBitacoraService bitacoraService,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            MapeoTipoActividadFase mapeoFase) {
         this.calendarioService = calendarioService;
         this.bitacoraService   = bitacoraService;
         this.objectMapper      = objectMapper;
+        this.mapeoFase         = mapeoFase;
     }
 
     @Override
@@ -70,6 +79,11 @@ private final ICalendarioService calendarioService;
                 .sesionesNoPareadasAProyecto(particion.get(false))
                 .proyectosDisponibles(mapearProyectos(proyectos))
                 .tiposActividad(tiposActividad)
+                .fases(Fase.ordenadas().stream().map(FaseDto::from).toList())
+                .mapeoFases(mapeoFase.obtenerMapeo().entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                Map.Entry::getKey, e -> e.getValue().getCodigo())))
+                .idTipoActividadServicio(idTipoActividadServicio)
                 .build();
     }
 
@@ -173,16 +187,30 @@ private final ICalendarioService calendarioService;
     private ActividadDto buildActividadDto(Long idEmpleado, CalendarioEventoDto evento,
                                             Object idProyecto, String fecha,
                                             String horaInicio, String horaFin) {
+        long idActividad = resolverIdActividad(evento.getModalidad());
         return ActividadDto.builder()
                 .idEmpleado(idEmpleado)
-                .idActividad(resolverIdActividad(evento.getModalidad()))
+                .idActividad(idActividad)
                 .idTipoActividad(ID_TIPO_ACTIVIDAD)
                 .idProyecto(idProyecto)
                 .descripcion(evento.getSubject())
                 .fechaRegistro(fecha)
                 .horaInicio(horaInicio)
                 .horaFin(horaFin)
+                .fase(resolverFase(ID_TIPO_ACTIVIDAD, nombreActividadDeSesion(idActividad)))
                 .build();
+    }
+
+    private String nombreActividadDeSesion(long idActividad) {
+        if (idActividad == ID_SESION_INTERNA) return "Sesión interna";
+        if (idActividad == ID_SESION_EXTERNA) return "Sesión externa";
+        return null;
+    }
+
+    private String resolverFase(int idTipoActividad, String nombreActividad) {
+        if (idTipoActividad != idTipoActividadServicio) return null;
+        Fase fase = mapeoFase.resolver(nombreActividad);
+        return fase != null ? fase.getCodigo() : null;
     }
 
     private LocalTime parsearHora(String hora) {
